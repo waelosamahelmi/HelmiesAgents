@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HelmiesAgents</title>
+  <style>
+    body { font-family: Inter, Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 0 16px; background:#0b0f14; color:#e8edf2; }
+    h1 { margin: 8px 0 2px; }
+    .sub { color:#9eb0c1; margin-bottom: 16px; }
+    .card { border:1px solid #243243; border-radius:12px; padding:12px; margin: 10px 0; background:#101722; }
+    textarea,input,button { width:100%; padding:10px; border-radius:8px; border:1px solid #2b3b4d; background:#0f1621; color:#e8edf2; }
+    button { cursor:pointer; background:#2563eb; border:none; font-weight:600; }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+  </style>
+</head>
+<body>
+  <h1>HelmiesAgents</h1>
+  <div class="sub">Competitive open AI agent runtime (CLI + API + Workflow + Memory)</div>
+
+  <div class="card">
+    <div class="row">
+      <input id="session" placeholder="session id" value="web-default" />
+      <button onclick="health()">Check Health</button>
+    </div>
+    <textarea id="msg" rows="5" placeholder="Ask HelmiesAgents anything..."></textarea>
+    <button onclick="send()">Send</button>
+  </div>
+
+  <div class="card">
+    <h3>Result</h3>
+    <pre id="out">No result yet.</pre>
+  </div>
+
+  <script>
+    async function send(){
+      const session_id = document.getElementById('session').value || 'web-default';
+      const message = document.getElementById('msg').value || '';
+      const res = await fetch('/chat', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({session_id, message})
+      });
+      const j = await res.json();
+      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+    }
+    async function health(){
+      const res = await fetch('/health');
+      const j = await res.json();
+      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+    }
+  </script>
+</body>
+</html>

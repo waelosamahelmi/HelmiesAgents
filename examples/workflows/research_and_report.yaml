@@ -1,0 +1,20 @@
+name: research-and-report
+nodes:
+  - id: plan
+    type: prompt
+    prompt: "Create a concise market research plan for launching HelmiesAgents as SaaS"
+
+  - id: timestamp
+    type: shell
+    depends_on: [plan]
+    command: "date -u"
+
+  - id: report
+    type: python
+    depends_on: [plan, timestamp]
+    code: |
+      result = {
+        "summary": "Workflow completed",
+        "plan_preview": outputs["plan"]["text"][:200],
+        "timestamp": outputs["timestamp"]["stdout"].strip(),
+      }

@@ -1,0 +1,5 @@
+name: hello-workflow
+nodes:
+  - id: intro
+    type: prompt
+    prompt: "Generate a short launch checklist for HelmiesAgents"
