@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from helmiesagents.core.agent import HelmiesAgent
+from helmiesagents.models import RequestContext
 
 
 @dataclass
@@ -15,17 +16,15 @@ class GatewayEvent:
 
 
 class GatewayRouter:
-    """Platform-agnostic inbound event router.
-
-    This enables one gateway behavior across Slack/Telegram/WhatsApp/Discord.
-    """
+    """Platform-agnostic inbound event router."""
 
     def __init__(self, agent: HelmiesAgent) -> None:
         self.agent = agent
 
-    def handle_event(self, event: GatewayEvent) -> dict[str, Any]:
+    def handle_event(self, event: GatewayEvent, ctx: RequestContext | None = None) -> dict[str, Any]:
+        ctx = ctx or RequestContext(user_id=event.user_id)
         session_id = f"{event.platform}:{event.channel_id}:{event.user_id}"
-        result = self.agent.chat(session_id=session_id, user_message=event.text)
+        result = self.agent.chat(session_id=session_id, user_message=event.text, ctx=ctx)
         return {
             "platform": event.platform,
             "channel_id": event.channel_id,

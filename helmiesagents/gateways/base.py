@@ -13,8 +13,8 @@ class IncomingMessage:
 class GatewayAdapter:
     name: str = "base"
 
-    def send_message(self, channel_id: str, text: str) -> None:  # pragma: no cover
+    def send_message(self, channel_id: str, text: str) -> dict:  # pragma: no cover
         raise NotImplementedError
 
     def poll(self) -> list[IncomingMessage]:  # pragma: no cover
-        raise NotImplementedError
+        return []

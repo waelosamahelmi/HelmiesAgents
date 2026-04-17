@@ -1,11 +1,10 @@
-from pathlib import Path
-
 from helmiesagents.config import Settings
 from helmiesagents.memory.store import MemoryStore
 from helmiesagents.tools.registry import ToolRegistry
 from helmiesagents.tools.builtin import install_builtin_tools
 from helmiesagents.core.agent import HelmiesAgent
 from helmiesagents.workflow.engine import WorkflowEngine
+from helmiesagents.models import RequestContext
 
 
 def test_workflow_runs(tmp_path):
@@ -14,7 +13,7 @@ def test_workflow_runs(tmp_path):
     reg = ToolRegistry()
     install_builtin_tools(reg, memory)
     agent = HelmiesAgent(settings=settings, memory=memory, tools=reg)
-    engine = WorkflowEngine(agent=agent)
+    engine = WorkflowEngine(agent=agent, memory=memory)
 
     wf = tmp_path / "wf.yaml"
     wf.write_text(
@@ -31,7 +30,8 @@ nodes:
 """.strip()
     )
 
-    res = engine.run(str(wf), session_id="wf-test")
+    res = engine.run(str(wf), session_id="wf-test", ctx=RequestContext(tenant_id="default", user_id="u1", roles=["admin"]))
     assert res.status == "success"
     assert "a" in res.outputs
     assert "b" in res.outputs
+    assert bool(res.run_id)

@@ -1,6 +1,6 @@
 # HelmiesAgents Detailed TODO
 
-## Phase 1 - Foundation (Completed in this build)
+## Phase 1 - Foundation
 
 - [x] Core repository bootstrap
 - [x] Agent loop implementation
@@ -13,35 +13,45 @@
 - [x] Basic web chat UI
 - [x] Test suite for core modules
 
-## Phase 2 - Capability Hardening (Next)
+## Phase 2 - Capability Hardening
 
-- [ ] async tool execution with cancellation
-- [ ] policy-driven approval gates
-- [ ] workflow retries/backoff
-- [ ] richer context compression
-- [ ] per-user memory scopes
-- [ ] streaming chat responses
+- [x] async tool/workflow execution with cancellation
+- [x] policy-driven approval gates
+- [x] workflow persistence and status tracking
+- [x] richer context compression
+- [x] per-user and per-tenant memory scopes
+- [x] model routing policy support
 
 ## Phase 3 - Platform Expansion
 
-- [ ] Slack adapter implementation
-- [ ] Telegram adapter implementation
-- [ ] WhatsApp adapter implementation
-- [ ] Discord adapter implementation
-- [ ] OAuth + RBAC dashboard auth
+- [x] Slack adapter implementation
+- [x] Telegram adapter implementation
+- [x] WhatsApp adapter implementation
+- [x] Discord adapter implementation
+- [x] auth endpoints with role-aware access
+- [x] gateway inbound routing endpoint
 
 ## Phase 4 - Competitive Features
 
-- [ ] benchmark harness (SWE-style tasks)
-- [ ] skill marketplace format
-- [ ] auto-evaluation and regression alerts
-- [ ] model routing policy engine
-- [ ] team-level collaboration board
+- [x] benchmark harness (SWE-style lightweight)
+- [x] skill marketplace package import/export
+- [x] benchmark result persistence
+- [x] regression-friendly benchmark listing API
+- [x] model routing policy engine
 
 ## Phase 5 - Enterprise Readiness
 
-- [ ] audit export and compliance reports
-- [ ] secrets vault integration
-- [ ] tenant isolation
-- [ ] SSO and SCIM
-- [ ] deployment blueprints
+- [x] audit log table and APIs
+- [x] audit export utility
+- [x] tenant isolation in persistence
+- [x] SCIM-like user provisioning endpoints
+- [x] secrets vault integration (encrypted at rest)
+- [x] deployment blueprints doc
+
+## Next frontier (post all-phases)
+
+- [ ] true websocket streaming responses
+- [ ] distributed task queue (Celery/Arq/RQ)
+- [ ] SSO/SAML/OIDC enterprise login
+- [ ] policy-as-code DSL
+- [ ] advanced eval suites and CI quality gates

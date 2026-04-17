@@ -1,83 +1,50 @@
 # HelmiesAgents
 
-HelmiesAgents is an open agent platform built to compete with modern AI agent systems by combining:
+HelmiesAgents is a competitive open AI agent platform built for real execution:
 
-- long-horizon autonomous execution
-- deterministic workflow orchestration
-- compounding memory + reusable skills
-- multi-surface delivery (CLI, API, Web, gateways)
+- autonomous agent loop
+- deterministic workflow DAG runtime
+- memory + skills compounding system
+- API + CLI + Web interfaces
+- gateway integrations
+- benchmark and enterprise controls
 
-It is designed for real work, not just demo loops.
+## Repo
 
-## Vision
+https://github.com/waelosamahelmi/HelmiesAgents
 
-Most agent stacks optimize one dimension:
-- autonomy without control, or
-- control without adaptability, or
-- UX without durable memory.
+## What is done (All Phases)
 
-HelmiesAgents combines all three:
+### Phase 1 — Foundation
+- agent loop + provider abstraction
+- tool registry + built-in tools
+- sqlite memory + skills
+- workflow engine
+- fastapi api
+- cli + web ui
 
-1) Autonomous: can plan, execute, reflect, and reuse patterns.
-2) Deterministic: can run structured DAG workflows with dependency control.
-3) Operational: can be used from terminal, browser, and messaging surfaces.
+### Phase 2 — Hardening
+- async workflow execution + cancellation
+- policy-driven approval checks
+- context compression
+- per-user/per-tenant memory scope
+- model routing policy
 
-## What is implemented now
+### Phase 3 — Platform Expansion
+- slack / telegram / discord / whatsapp send adapters
+- unified gateway inbound routing endpoint
+- role-aware auth and JWT login
 
-### Agent Runtime
-- Core agent loop with provider abstraction
-- Plan generation before response
-- Tool-call parser and execution bridge
-- Built-in safety-aware shell execution
+### Phase 4 — Competitive Features
+- benchmark harness + persistent benchmark results
+- skill package import/export marketplace format
+- route policy evaluation
 
-### Memory and Skills
-- SQLite-backed message history
-- Searchable memory retrieval
-- Facts store (upsert/list)
-- Skills store (save/list/get)
-
-### Tooling
-Built-in tools:
-- `time_now`
-- `read_file`
-- `write_file`
-- `search_files`
-- `run_shell`
-- `http_get`
-- `memory_search`
-- `ingest_to_markdown`
-
-### Workflows
-- YAML DAG engine with dependencies
-- Node types:
-  - `prompt`
-  - `shell`
-  - `python`
-  - `http`
-- CLI and API workflow execution
-
-### Interfaces
-- CLI (`helmiesagents`)
-- FastAPI server
-- Browser chat UI (`/`)
-- Gateway router abstraction (Slack/Telegram/WhatsApp/Discord adapters scaffolded)
-
-## Competitive design basis
-
-This build was planned after studying 20 repositories including:
-
-- GenericAgent
-- claude-mem
-- superpowers
-- open-agents
-- hermes-agent
-- multica
-- Archon
-- deer-flow
-- markitdown
-- and 11 more
-
-Full notes: `docs/REPO_STUDY_FULL.md` and `docs/COMPETITIVE_ANALYSIS.md`.
+### Phase 5 — Enterprise Readiness
+- audit logging and export API
+- scim-like user provisioning endpoints
+- encrypted secrets vault integration
+- deployment blueprints documentation
 
 ## Quickstart
 
@@ -86,90 +53,98 @@ cd HelmiesAgents
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
-
 pytest -q
-
 helmiesagents serve --host 0.0.0.0 --port 8787
 ```
 
-Open `http://localhost:8787`.
+Open http://localhost:8787
 
-### CLI examples
+### Default login
+- username: `admin`
+- password: `admin123`
+
+Change this immediately via `HELMIES_AUTH_USERS_JSON` in production.
+
+## Key API Endpoints
+
+### Auth
+- `POST /auth/login`
+
+### Agent
+- `POST /chat`
+- `GET /memory/search`
+
+### Skills
+- `GET /skills`
+- `POST /skills`
+- `POST /skills/export`
+- `POST /skills/import`
+
+### Workflow
+- `POST /workflow/run`
+- `POST /workflow/run_async`
+- `GET /workflow/job/{job_id}`
+- `POST /workflow/job/{job_id}/cancel`
+- `GET /workflow/runs`
+
+### Gateways
+- `POST /gateway/send`
+- `POST /gateway/inbound`
+
+### Approvals
+- `POST /approvals/check`
+- `POST /approvals/decide`
+
+### Benchmark
+- `POST /benchmark/run`
+- `GET /benchmark/results`
+
+### Enterprise
+- `GET /audit/logs`
+- `POST /audit/export`
+- `POST /scim/users`
+- `GET /scim/users`
+- `POST /vault/secrets`
+- `GET /vault/secrets/{key}`
+
+## CLI Commands
 
 ```bash
-# one-shot chat
-helmiesagents chat "Create a launch checklist for HelmiesAgents"
-
-# interactive chat
+helmiesagents chat "what time is it"
 helmiesagents repl
-
-# run workflow
 helmiesagents run-workflow examples/workflows/research_and_report.yaml
-
-# initialize local workspace template
+helmiesagents run-workflow-async examples/workflows/research_and_report.yaml
+helmiesagents benchmark-run --suite smoke
+helmiesagents benchmark-list --suite smoke
+helmiesagents audit-export ./out/audit.json
 helmiesagents init-project ./my_workspace
-
-# search memory
-helmiesagents memory-search "launch"
 ```
 
-## API examples
+## Environment Variables
 
-### Health
-
-```bash
-curl http://localhost:8787/health
-```
-
-### Chat
-
-```bash
-curl -X POST http://localhost:8787/chat \
-  -H 'Content-Type: application/json' \
-  -d '{"session_id":"demo","message":"what time is it"}'
-```
-
-### Run workflow
-
-```bash
-curl -X POST http://localhost:8787/workflow/run \
-  -H 'Content-Type: application/json' \
-  -d '{"workflow_path":"examples/workflows/research_and_report.yaml","session_id":"wf1"}'
-```
-
-## Environment variables
-
-Optional OpenAI-compatible provider:
-
-- `HELMIES_PROVIDER=openai`
+### Core
+- `HELMIES_PROVIDER=auto|openai`
 - `OPENAI_API_KEY=...`
 - `OPENAI_BASE_URL=https://api.openai.com/v1`
 - `OPENAI_MODEL=gpt-4o-mini`
-
-Runtime settings:
-
 - `HELMIES_DB_PATH=./helmiesagents.db`
 - `HELMIES_WORKSPACE_DIR=./workspace`
-- `HELMIES_HOST=0.0.0.0`
-- `HELMIES_PORT=8787`
+- `HELMIES_ROUTING_POLICY_FILE=./routing_policy.yaml`
 
-Without provider keys, the runtime uses a deterministic local mock provider for offline development/testing.
+### Auth / Enterprise
+- `HELMIES_JWT_SECRET=change-me`
+- `HELMIES_AUTH_USERS_JSON='[{"username":"admin","password":"admin123","roles":["admin"],"tenant_id":"default"}]'`
+- `HELMIES_SCIM_TOKEN=change-me-scim-token`
+- `HELMIES_VAULT_KEY=change-me-vault-key`
 
-## Project structure
+### Gateways
+- `SLACK_BOT_TOKEN=...`
+- `TELEGRAM_BOT_TOKEN=...`
+- `DISCORD_BOT_TOKEN=...`
+- `WHATSAPP_API_URL=...`
+- `WHATSAPP_TOKEN=...`
 
-```text
-helmiesagents/
-  core/         # agent loop + planner
-  providers/    # model provider adapters
-  tools/        # tool registry + built-ins
-  memory/       # sqlite memory and skills
-  workflow/     # yaml DAG runtime
-  api/          # fastapi server
-  web/          # lightweight web UI
-  gateways/     # platform adapters + router
-```
-
-## Documentation
+## Docs
 
 - `docs/VISION.md`
 - `docs/ARCHITECTURE.md`
@@ -177,16 +152,8 @@ helmiesagents/
 - `docs/COMPETITIVE_ANALYSIS.md`
 - `docs/REPO_STUDY_FULL.md`
 - `docs/TODO_DETAILED.md`
-
-## Roadmap
-
-Near-term priorities:
-
-1) full Slack/Telegram/WhatsApp/Discord gateway implementations
-2) richer approval + policy system for risky actions
-3) async queue and resumable run manager
-4) benchmark harness and quality scoring
-5) multi-tenant SaaS packaging
+- `docs/DEPLOYMENT_BLUEPRINTS.md`
+- `docs/PHASES_COMPLETION_REPORT.md`
 
 ## License
 

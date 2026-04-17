@@ -5,27 +5,45 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>HelmiesAgents</title>
   <style>
-    body { font-family: Inter, Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 0 16px; background:#0b0f14; color:#e8edf2; }
+    body { font-family: Inter, Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 0 16px; background:#0b0f14; color:#e8edf2; }
     h1 { margin: 8px 0 2px; }
     .sub { color:#9eb0c1; margin-bottom: 16px; }
     .card { border:1px solid #243243; border-radius:12px; padding:12px; margin: 10px 0; background:#101722; }
-    textarea,input,button { width:100%; padding:10px; border-radius:8px; border:1px solid #2b3b4d; background:#0f1621; color:#e8edf2; }
+    textarea,input,button,select { width:100%; padding:10px; border-radius:8px; border:1px solid #2b3b4d; background:#0f1621; color:#e8edf2; }
     button { cursor:pointer; background:#2563eb; border:none; font-weight:600; }
-    pre { white-space: pre-wrap; word-wrap: break-word; }
+    pre { white-space: pre-wrap; word-wrap: break-word; max-height: 45vh; overflow:auto; }
     .row { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; }
+    .tabs button { margin-right:8px; width:auto; padding:8px 12px; }
   </style>
 </head>
 <body>
   <h1>HelmiesAgents</h1>
-  <div class="sub">Competitive open AI agent runtime (CLI + API + Workflow + Memory)</div>
+  <div class="sub">All phases edition: auth, chat, workflows, benchmark, audit, gateways</div>
 
   <div class="card">
-    <div class="row">
-      <input id="session" placeholder="session id" value="web-default" />
-      <button onclick="health()">Check Health</button>
+    <div class="row3">
+      <input id="username" placeholder="username" value="admin" />
+      <input id="password" placeholder="password" value="admin123" />
+      <button onclick="login()">Login</button>
     </div>
-    <textarea id="msg" rows="5" placeholder="Ask HelmiesAgents anything..."></textarea>
-    <button onclick="send()">Send</button>
+    <div id="authStatus" style="margin-top:8px;color:#9eb0c1;">Not logged in</div>
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <button onclick="health()">Health</button>
+      <button onclick="sendChat()">Chat</button>
+      <button onclick="runWorkflow()">Run Workflow</button>
+      <button onclick="runBenchmark()">Benchmark</button>
+      <button onclick="listRuns()">Workflow Runs</button>
+      <button onclick="listAudit()">Audit Logs</button>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <input id="session" placeholder="session id" value="web-default" />
+      <input id="workflowPath" placeholder="workflow path" value="examples/workflows/research_and_report.yaml" />
+    </div>
+    <textarea id="msg" rows="5" placeholder="Ask HelmiesAgents anything...">what time is it</textarea>
   </div>
 
   <div class="card">
@@ -34,21 +52,71 @@
   </div>
 
   <script>
-    async function send(){
-      const session_id = document.getElementById('session').value || 'web-default';
-      const message = document.getElementById('msg').value || '';
-      const res = await fetch('/chat', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({session_id, message})
-      });
-      const j = await res.json();
-      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+    let token = null;
+
+    function authHeaders(){
+      const h = {'Content-Type':'application/json'};
+      if (token) h['Authorization'] = 'Bearer ' + token;
+      return h;
     }
+
+    async function api(path, method='GET', body=null){
+      const opts = {method, headers: authHeaders()};
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(path, opts);
+      let data;
+      try { data = await res.json(); } catch { data = {raw: await res.text()}; }
+      if (!res.ok) throw data;
+      return data;
+    }
+
+    async function login(){
+      try{
+        const data = await api('/auth/login','POST',{username:username.value,password:password.value});
+        token = data.access_token;
+        authStatus.textContent = `Logged in tenant=${data.tenant_id} roles=${(data.roles||[]).join(',')}`;
+        out.textContent = JSON.stringify(data,null,2);
+      }catch(e){ out.textContent = JSON.stringify(e,null,2); }
+    }
+
     async function health(){
-      const res = await fetch('/health');
-      const j = await res.json();
-      document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+      try{ out.textContent = JSON.stringify(await api('/health'),null,2); }
+      catch(e){ out.textContent = JSON.stringify(e,null,2); }
+    }
+
+    async function sendChat(){
+      try{
+        out.textContent = JSON.stringify(await api('/chat','POST',{session_id:session.value,message:msg.value}),null,2);
+      }catch(e){ out.textContent = JSON.stringify(e,null,2); }
+    }
+
+    async function runWorkflow(){
+      try{
+        out.textContent = JSON.stringify(await api('/workflow/run','POST',{workflow_path:workflowPath.value,session_id:session.value}),null,2);
+      }catch(e){ out.textContent = JSON.stringify(e,null,2); }
+    }
+
+    async function runBenchmark(){
+      try{
+        const body = {
+          suite_name:'web-suite',
+          scenarios:[
+            {name:'time-tool',prompt:'what time is it',must_contain:['time']},
+            {name:'files-tool',prompt:'list files',must_contain:['files']}
+          ]
+        };
+        out.textContent = JSON.stringify(await api('/benchmark/run','POST',body),null,2);
+      }catch(e){ out.textContent = JSON.stringify(e,null,2); }
+    }
+
+    async function listRuns(){
+      try{ out.textContent = JSON.stringify(await api('/workflow/runs'),null,2); }
+      catch(e){ out.textContent = JSON.stringify(e,null,2); }
+    }
+
+    async function listAudit(){
+      try{ out.textContent = JSON.stringify(await api('/audit/logs'),null,2); }
+      catch(e){ out.textContent = JSON.stringify(e,null,2); }
     }
   </script>
 </body>

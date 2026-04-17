@@ -18,6 +18,26 @@ class Settings:
     host: str = "0.0.0.0"
     port: int = 8787
 
+    # auth + tenancy
+    jwt_secret: str = "change-me-dev-secret"
+    auth_users_json: str = '[{"username":"admin","password":"admin123","roles":["admin"],"tenant_id":"default"}]'
+
+    # optional routing policy file
+    routing_policy_file: str | None = None
+
+    # gateway credentials
+    slack_bot_token: str | None = None
+    telegram_bot_token: str | None = None
+    discord_bot_token: str | None = None
+    whatsapp_api_url: str | None = None
+    whatsapp_token: str | None = None
+
+    # scim
+    scim_token: str = "change-me-scim-token"
+
+    # secrets vault
+    vault_key: str | None = None
+
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
@@ -29,6 +49,19 @@ class Settings:
             workspace_dir=os.getenv("HELMIES_WORKSPACE_DIR", "./workspace"),
             host=os.getenv("HELMIES_HOST", "0.0.0.0"),
             port=int(os.getenv("HELMIES_PORT", "8787")),
+            jwt_secret=os.getenv("HELMIES_JWT_SECRET", "change-me-dev-secret"),
+            auth_users_json=os.getenv(
+                "HELMIES_AUTH_USERS_JSON",
+                '[{"username":"admin","password":"admin123","roles":["admin"],"tenant_id":"default"}]',
+            ),
+            routing_policy_file=os.getenv("HELMIES_ROUTING_POLICY_FILE"),
+            slack_bot_token=os.getenv("SLACK_BOT_TOKEN"),
+            telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
+            discord_bot_token=os.getenv("DISCORD_BOT_TOKEN"),
+            whatsapp_api_url=os.getenv("WHATSAPP_API_URL"),
+            whatsapp_token=os.getenv("WHATSAPP_TOKEN"),
+            scim_token=os.getenv("HELMIES_SCIM_TOKEN", "change-me-scim-token"),
+            vault_key=os.getenv("HELMIES_VAULT_KEY"),
         )
 
     def ensure_dirs(self) -> None:

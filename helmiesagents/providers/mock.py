@@ -4,8 +4,7 @@ from __future__ import annotations
 class MockProvider:
     name = "mock"
 
-    def generate(self, system_prompt: str, user_prompt: str) -> str:
-        # Focus only on user request section to avoid false matches from tool docs.
+    def generate(self, system_prompt: str, user_prompt: str, model_override: str | None = None) -> str:
         marker = "User request:\n"
         if marker in user_prompt:
             q = user_prompt.split(marker, 1)[1].split("\n\nPlan:", 1)[0].lower()
@@ -15,9 +14,9 @@ class MockProvider:
         if "time" in q:
             return "[[tool:time_now {}]]\nThe current time was retrieved using the local tool."
         if "list files" in q or "show files" in q:
-            return "[[tool:search_files {\"pattern\":\"*\",\"path\":\".\"}]]\nI listed files in the current workspace."
-        if "run" in q and "workflow" in q:
-            return "I can run a workflow file via CLI/API using the workflow engine."
+            return '[[tool:search_files {"pattern":"*","path":"."}]]\nI listed files in the current workspace.'
+        if "ingest" in q and "file" in q:
+            return '[[tool:ingest_to_markdown {"path":"README.md"}]]\nFile ingestion done.'
         return (
             "HelmiesAgents processed your request. "
             "If you want tool execution, ask explicitly (e.g., 'what time is it' or 'list files')."

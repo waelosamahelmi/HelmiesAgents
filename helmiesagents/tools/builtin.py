@@ -10,9 +10,10 @@ import httpx
 from helmiesagents.tools.registry import Tool, ToolRegistry
 from helmiesagents.memory.store import MemoryStore
 from helmiesagents.tools.ingestion import to_markdown
+from helmiesagents.models import CancellationToken
 
 
-def install_builtin_tools(registry: ToolRegistry, memory: MemoryStore) -> None:
+def install_builtin_tools(registry: ToolRegistry, memory: MemoryStore, cancel_token: CancellationToken | None = None) -> None:
     def time_now(_: dict) -> dict:
         return {"iso": datetime.utcnow().isoformat()}
 
@@ -50,6 +51,9 @@ def install_builtin_tools(registry: ToolRegistry, memory: MemoryStore) -> None:
         for d in deny:
             if re.search(d, command):
                 raise PermissionError("Command blocked by safety policy")
+
+        if cancel_token and cancel_token.cancelled:
+            return {"exit_code": 130, "stdout": "", "stderr": "cancelled"}
 
         proc = subprocess.run(
             command,

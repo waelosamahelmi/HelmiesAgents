@@ -6,5 +6,5 @@ from typing import Protocol
 class LLMProvider(Protocol):
     name: str
 
-    def generate(self, system_prompt: str, user_prompt: str) -> str:
+    def generate(self, system_prompt: str, user_prompt: str, model_override: str | None = None) -> str:
         ...
