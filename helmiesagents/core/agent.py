@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,6 +27,12 @@ class AgentResponse:
     tools_executed: list[dict[str, Any]]
 
 
+@dataclass
+class StreamEvent:
+    type: str
+    data: dict[str, Any]
+
+
 class HelmiesAgent:
     def __init__(self, settings: Settings, memory: MemoryStore, tools: ToolRegistry) -> None:
         self.settings = settings
@@ -45,9 +52,7 @@ class HelmiesAgent:
             f"Available tools:\n{tool_lines}"
         )
 
-    def chat(self, session_id: str, user_message: str, ctx: RequestContext | None = None) -> AgentResponse:
-        ctx = ctx or RequestContext()
-
+    def _build_chat_prompt(self, session_id: str, user_message: str, ctx: RequestContext) -> tuple[list[str], str, Any]:
         self.memory.add_message(ctx.tenant_id, ctx.user_id, session_id, "user", user_message)
         recent = self.memory.get_recent_messages(ctx.tenant_id, ctx.user_id, session_id, limit=30)
         msgs = [(m.role, m.content) for m in recent]
@@ -63,8 +68,17 @@ class HelmiesAgent:
             + "Plan:\n- "
             + "\n- ".join(plan)
         )
-        model_output = self.provider.generate(self._system_prompt(), prompt, model_override=route.model)
+        return plan, prompt, route
 
+    def _apply_tools_and_finalize(
+        self,
+        *,
+        session_id: str,
+        ctx: RequestContext,
+        model_output: str,
+        plan: list[str],
+        route_policy: str,
+    ) -> AgentResponse:
         tools_executed: list[dict[str, Any]] = []
 
         def _run_tools(text: str) -> str:
@@ -109,10 +123,55 @@ class HelmiesAgent:
             payload_json=json.dumps(
                 {
                     "session_id": session_id,
-                    "route_policy": route.policy_name,
+                    "route_policy": route_policy,
                     "tools_count": len(tools_executed),
                 }
             ),
         )
 
         return AgentResponse(text=final_text, plan=plan, tools_executed=tools_executed)
+
+    def chat(self, session_id: str, user_message: str, ctx: RequestContext | None = None) -> AgentResponse:
+        ctx = ctx or RequestContext()
+        plan, prompt, route = self._build_chat_prompt(session_id=session_id, user_message=user_message, ctx=ctx)
+        model_output = self.provider.generate(self._system_prompt(), prompt, model_override=route.model)
+        return self._apply_tools_and_finalize(
+            session_id=session_id,
+            ctx=ctx,
+            model_output=model_output,
+            plan=plan,
+            route_policy=route.policy_name,
+        )
+
+    def stream_chat(self, session_id: str, user_message: str, ctx: RequestContext | None = None) -> Iterable[StreamEvent]:
+        ctx = ctx or RequestContext()
+        plan, prompt, route = self._build_chat_prompt(session_id=session_id, user_message=user_message, ctx=ctx)
+
+        yield StreamEvent(type="meta", data={"plan": plan, "route_policy": route.policy_name, "model": route.model})
+
+        chunks: list[str] = []
+        for chunk in self.provider.stream_generate(self._system_prompt(), prompt, model_override=route.model):
+            if not chunk:
+                continue
+            chunks.append(chunk)
+            yield StreamEvent(type="token", data={"text": chunk})
+
+        full_text = "".join(chunks)
+        yield StreamEvent(type="model_output", data={"text": full_text})
+
+        final = self._apply_tools_and_finalize(
+            session_id=session_id,
+            ctx=ctx,
+            model_output=full_text,
+            plan=plan,
+            route_policy=route.policy_name,
+        )
+        yield StreamEvent(
+            type="final",
+            data={
+                "response": final.text,
+                "plan": final.plan,
+                "tools_executed": final.tools_executed,
+                "tenant_id": ctx.tenant_id,
+            },
+        )

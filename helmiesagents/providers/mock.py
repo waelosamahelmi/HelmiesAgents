@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 
 class MockProvider:
     name = "mock"
 
-    def generate(self, system_prompt: str, user_prompt: str, model_override: str | None = None) -> str:
+    def _build_response(self, user_prompt: str) -> str:
         marker = "User request:\n"
         if marker in user_prompt:
             q = user_prompt.split(marker, 1)[1].split("\n\nPlan:", 1)[0].lower()
@@ -21,3 +23,11 @@ class MockProvider:
             "HelmiesAgents processed your request. "
             "If you want tool execution, ask explicitly (e.g., 'what time is it' or 'list files')."
         )
+
+    def generate(self, system_prompt: str, user_prompt: str, model_override: str | None = None) -> str:
+        return self._build_response(user_prompt)
+
+    def stream_generate(self, system_prompt: str, user_prompt: str, model_override: str | None = None) -> Iterable[str]:
+        text = self._build_response(user_prompt)
+        for ch in text:
+            yield ch

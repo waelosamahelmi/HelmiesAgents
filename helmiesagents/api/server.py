@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -110,6 +110,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=401, detail=f"Invalid token: {e}") from e
 
+    def get_ctx_from_ws_token(token: str | None) -> RequestContext:
+        if not token:
+            return RequestContext()
+        try:
+            return auth.decode_token(token)
+        except Exception:
+            return RequestContext()
+
     @app.get("/health")
     def health() -> dict[str, Any]:
         return {
@@ -136,6 +144,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "tools_executed": res.tools_executed,
             "tenant_id": ctx.tenant_id,
         }
+
+    @app.websocket("/chat/ws")
+    async def chat_ws(ws: WebSocket) -> None:
+        await ws.accept()
+        try:
+            payload = await ws.receive_json()
+            token = payload.get("token")
+            session_id = payload.get("session_id", "default")
+            message = payload.get("message", "")
+
+            ctx = get_ctx_from_ws_token(token)
+
+            if not isinstance(message, str) or not message.strip():
+                await ws.send_json({"type": "error", "message": "message must be a non-empty string"})
+                await ws.close(code=1003)
+                return
+
+            for event in agent.stream_chat(session_id=session_id, user_message=message, ctx=ctx):
+                await ws.send_json({"type": event.type, **event.data})
+
+            await ws.send_json({"type": "done"})
+            await ws.close(code=1000)
+        except WebSocketDisconnect:
+            return
+        except Exception as e:
+            await ws.send_json({"type": "error", "message": str(e)})
+            await ws.close(code=1011)
 
     @app.get("/memory/search")
     def memory_search(q: str, limit: int = 10, authorization: str | None = Header(default=None)) -> dict[str, Any]:

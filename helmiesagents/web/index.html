@@ -34,6 +34,7 @@
     <div class="tabs">
       <button onclick="health()">Health</button>
       <button onclick="sendChat()">Chat</button>
+      <button onclick="sendChatStream()">Stream Chat</button>
       <button onclick="runWorkflow()">Run Workflow</button>
       <button onclick="runBenchmark()">Benchmark</button>
       <button onclick="listRuns()">Workflow Runs</button>
@@ -88,6 +89,47 @@
       try{
         out.textContent = JSON.stringify(await api('/chat','POST',{session_id:session.value,message:msg.value}),null,2);
       }catch(e){ out.textContent = JSON.stringify(e,null,2); }
+    }
+
+    async function sendChatStream(){
+      const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${wsProto}://${location.host}/chat/ws`);
+      const chunks = [];
+      const events = [];
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          session_id: session.value,
+          message: msg.value,
+          token: token || null,
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        let data;
+        try { data = JSON.parse(event.data); }
+        catch { return; }
+
+        events.push(data);
+        if (data.type === 'token' && data.text) chunks.push(data.text);
+
+        out.textContent = JSON.stringify({
+          stream_preview: chunks.join(''),
+          latest_event: data,
+          event_count: events.length,
+        }, null, 2);
+
+        if (data.type === 'done') {
+          out.textContent = JSON.stringify({
+            stream_preview: chunks.join(''),
+            events,
+          }, null, 2);
+        }
+      };
+
+      ws.onerror = () => {
+        out.textContent = JSON.stringify({error: 'websocket error'}, null, 2);
+      };
     }
 
     async function runWorkflow(){

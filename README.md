@@ -72,6 +72,7 @@ Change this immediately via `HELMIES_AUTH_USERS_JSON` in production.
 
 ### Agent
 - `POST /chat`
+- `WS /chat/ws` (true token streaming + final tool-executed response event)
 - `GET /memory/search`
 
 ### Skills

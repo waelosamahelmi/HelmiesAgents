@@ -50,7 +50,7 @@
 
 ## Next frontier (post all-phases)
 
-- [ ] true websocket streaming responses
+- [x] true websocket streaming responses
 - [ ] distributed task queue (Celery/Arq/RQ)
 - [ ] SSO/SAML/OIDC enterprise login
 - [ ] policy-as-code DSL
