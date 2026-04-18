@@ -228,6 +228,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await ws.send_json({"type": "error", "message": str(e)})
             await ws.close(code=1011)
 
+    @app.get("/execution/budget/effective")
+    def execution_budget_effective(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        return {
+            "tenant_id": ctx.tenant_id,
+            "user_id": ctx.user_id,
+            "roles": ctx.roles,
+            "budget": agent.get_effective_budget(ctx),
+        }
+
     @app.get("/memory/search")
     def memory_search(q: str, limit: int = 10, authorization: str | None = Header(default=None)) -> dict[str, Any]:
         ctx = get_ctx(authorization)

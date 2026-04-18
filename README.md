@@ -75,6 +75,7 @@ Change this immediately via `HELMIES_AUTH_USERS_JSON` in production.
 ### Agent
 - `POST /chat` (includes quality metadata: critic + autonomous subruns)
 - `WS /chat/ws` (true token streaming + final tool-executed response event + quality)
+- `GET /execution/budget/effective`
 - `GET /memory/search`
 
 ### Skills
@@ -205,6 +206,7 @@ helmiesagents init-project ./my_workspace
 - `docs/DEPLOYMENT_BLUEPRINTS.md`
 - `docs/PHASES_COMPLETION_REPORT.md`
 - `evals/suites.yaml`
+- `policy.execution.yaml`
 
 ## License
 

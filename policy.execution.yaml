@@ -1,0 +1,18 @@
+version: 1
+
+defaults:
+  max_tool_calls: 8
+  max_subruns: 2
+  max_critic_retries: 1
+
+tenants:
+  default:
+    max_subruns: 3
+
+roles:
+  admin:
+    max_tool_calls: 12
+  viewer:
+    max_tool_calls: 2
+    max_subruns: 1
+    max_critic_retries: 0

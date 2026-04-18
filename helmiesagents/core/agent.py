@@ -83,6 +83,10 @@ class HelmiesAgent:
             "max_critic_retries": b.max_critic_retries,
         }
 
+    def get_effective_budget(self, ctx: RequestContext | None = None) -> dict[str, Any]:
+        ctx = ctx or RequestContext()
+        return self._resolve_budget(ctx)
+
     def _apply_tools_and_finalize(
         self,
         *,
