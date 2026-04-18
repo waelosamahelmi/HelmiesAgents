@@ -44,6 +44,11 @@ class Settings:
     eval_suites_file: str | None = None
     eval_min_score: float = 80.0
 
+    # autonomous quality critic loop
+    critic_enabled: bool = True
+    critic_max_retries: int = 1
+    critic_min_score: float = 0.7
+
     # gateway credentials
     slack_bot_token: str | None = None
     telegram_bot_token: str | None = None
@@ -87,6 +92,9 @@ class Settings:
             queue_poll_interval_seconds=float(os.getenv("HELMIES_QUEUE_POLL_INTERVAL_SECONDS", "0.5")),
             eval_suites_file=os.getenv("HELMIES_EVAL_SUITES_FILE"),
             eval_min_score=float(os.getenv("HELMIES_EVAL_MIN_SCORE", "80")),
+            critic_enabled=_env_bool("HELMIES_CRITIC_ENABLED", True),
+            critic_max_retries=int(os.getenv("HELMIES_CRITIC_MAX_RETRIES", "1")),
+            critic_min_score=float(os.getenv("HELMIES_CRITIC_MIN_SCORE", "0.7")),
             slack_bot_token=os.getenv("SLACK_BOT_TOKEN"),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
             discord_bot_token=os.getenv("DISCORD_BOT_TOKEN"),

@@ -197,6 +197,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "response": res.text,
             "plan": res.plan,
             "tools_executed": res.tools_executed,
+            "quality": res.quality,
             "tenant_id": ctx.tenant_id,
         }
 

@@ -25,3 +25,12 @@ def test_agent_tool_execution_time(tmp_path):
     agent = build_agent(tmp_path)
     res = agent.chat("t1", "what time is it", ctx=RequestContext(tenant_id="default", user_id="u1", roles=["admin"]))
     assert any(t["tool"] == "time_now" for t in res.tools_executed)
+
+
+def test_agent_quality_metadata_present(tmp_path):
+    agent = build_agent(tmp_path)
+    res = agent.chat("t2", "what time is it", ctx=RequestContext(tenant_id="default", user_id="u1", roles=["admin"]))
+    assert res.quality is not None
+    assert "final_score" in res.quality
+    assert "attempts" in res.quality
+    assert isinstance(res.quality["attempts"], list)

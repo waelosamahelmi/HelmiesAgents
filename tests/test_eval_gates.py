@@ -56,6 +56,7 @@ def test_run_named_suite_with_threshold_gate(tmp_path):
     assert summary.total == 1
     assert summary.threshold == 90
     assert summary.gate_passed is True
+    assert "quality" in summary.details[0]
 
 
 def test_api_benchmark_suites_and_gate(tmp_path):

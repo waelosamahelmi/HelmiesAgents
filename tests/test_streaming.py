@@ -35,6 +35,7 @@ def test_agent_stream_chat_emits_events(tmp_path):
     final = [e for e in events if e.type == "final"][0]
     assert "response" in final.data
     assert any(t["tool"] == "time_now" for t in final.data["tools_executed"])
+    assert "quality" in final.data
 
     saved = memory.get_recent_messages("default", "u1", "s-stream-1", limit=5)
     assert any(m.role == "assistant" for m in saved)
@@ -60,6 +61,7 @@ def test_websocket_chat_stream_endpoint(tmp_path):
     final = [e for e in events if e.get("type") == "final"][0]
     assert "response" in final
     assert any(t["tool"] == "time_now" for t in final["tools_executed"])
+    assert "quality" in final
     assert events[-1]["type"] == "done"
 
 

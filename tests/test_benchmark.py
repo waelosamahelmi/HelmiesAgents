@@ -26,3 +26,4 @@ def test_benchmark_suite(tmp_path):
 
     assert summary.total == 2
     assert summary.passed >= 1
+    assert "quality" in summary.details[0]

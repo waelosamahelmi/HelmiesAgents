@@ -64,6 +64,7 @@ class BenchmarkHarness:
                 "passed": ok,
                 "required": s.must_contain,
                 "response_preview": resp.text[:300],
+                "quality": resp.quality,
             }
             details.append(detail)
             self.memory.add_benchmark_result(

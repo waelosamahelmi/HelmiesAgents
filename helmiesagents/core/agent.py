@@ -8,6 +8,7 @@ from typing import Any
 
 from helmiesagents.config import Settings
 from helmiesagents.context.compression import ContextCompressor
+from helmiesagents.core.critic import ResponseCritic
 from helmiesagents.core.planner import make_plan
 from helmiesagents.memory.store import MemoryStore
 from helmiesagents.models import RequestContext
@@ -25,6 +26,7 @@ class AgentResponse:
     text: str
     plan: list[str]
     tools_executed: list[dict[str, Any]]
+    quality: dict[str, Any] | None = None
 
 
 @dataclass
@@ -41,6 +43,7 @@ class HelmiesAgent:
         self.provider = build_provider(settings)
         self.policy = PolicyEngine(policy_file=settings.policy_dsl_file)
         self.compressor = ContextCompressor()
+        self.critic = ResponseCritic()
         self.router = ModelRouter(default_model=settings.openai_model, policy_file=settings.routing_policy_file)
 
     def _system_prompt(self) -> str:
@@ -78,6 +81,7 @@ class HelmiesAgent:
         model_output: str,
         plan: list[str],
         route_policy: str,
+        quality: dict[str, Any] | None = None,
     ) -> AgentResponse:
         tools_executed: list[dict[str, Any]] = []
 
@@ -137,22 +141,75 @@ class HelmiesAgent:
                     "session_id": session_id,
                     "route_policy": route_policy,
                     "tools_count": len(tools_executed),
+                    "quality": quality,
                 }
             ),
         )
 
-        return AgentResponse(text=final_text, plan=plan, tools_executed=tools_executed)
+        return AgentResponse(text=final_text, plan=plan, tools_executed=tools_executed, quality=quality)
+
+    def _repair_prompt(self, *, user_message: str, previous_response: str, critic_feedback: str, required_keywords: list[str]) -> str:
+        req_line = ", ".join(required_keywords) if required_keywords else "(none)"
+        return (
+            "Revise your previous answer to improve quality.\n"
+            f"Original user request:\n{user_message}\n\n"
+            f"Previous response:\n{previous_response}\n\n"
+            f"Critic feedback:\n{critic_feedback}\n\n"
+            f"Required keywords to include if relevant: {req_line}\n"
+            "Return only the improved final answer. Keep it concise and actionable."
+        )
+
+    def _generate_with_critic(self, *, system_prompt: str, prompt: str, user_message: str, model_override: str | None) -> tuple[str, dict[str, Any]]:
+        required = self.critic.required_keywords_from_prompt(user_message)
+        attempts: list[dict[str, Any]] = []
+
+        current = self.provider.generate(system_prompt, prompt, model_override=model_override)
+        c = self.critic.evaluate(user_message=user_message, response_text=current, required_keywords=required)
+        attempts.append({"attempt": 1, "score": c.score, "pass": c.pass_gate, "feedback": c.feedback})
+
+        max_retries = max(0, int(self.settings.critic_max_retries))
+        target = float(self.settings.critic_min_score)
+
+        if self.settings.critic_enabled:
+            tries = 0
+            while tries < max_retries and (not c.pass_gate or c.score < target):
+                tries += 1
+                repair = self._repair_prompt(
+                    user_message=user_message,
+                    previous_response=current,
+                    critic_feedback=c.feedback,
+                    required_keywords=required,
+                )
+                current = self.provider.generate(system_prompt, repair, model_override=model_override)
+                c = self.critic.evaluate(user_message=user_message, response_text=current, required_keywords=required)
+                attempts.append({"attempt": 1 + tries, "score": c.score, "pass": c.pass_gate, "feedback": c.feedback})
+
+        quality = {
+            "enabled": bool(self.settings.critic_enabled),
+            "required_keywords": required,
+            "attempts": attempts,
+            "final_score": c.score,
+            "final_pass": bool(c.pass_gate and c.score >= target),
+            "target": target,
+        }
+        return current, quality
 
     def chat(self, session_id: str, user_message: str, ctx: RequestContext | None = None) -> AgentResponse:
         ctx = ctx or RequestContext()
         plan, prompt, route = self._build_chat_prompt(session_id=session_id, user_message=user_message, ctx=ctx)
-        model_output = self.provider.generate(self._system_prompt(), prompt, model_override=route.model)
+        model_output, quality = self._generate_with_critic(
+            system_prompt=self._system_prompt(),
+            prompt=prompt,
+            user_message=user_message,
+            model_override=route.model,
+        )
         return self._apply_tools_and_finalize(
             session_id=session_id,
             ctx=ctx,
             model_output=model_output,
             plan=plan,
             route_policy=route.policy_name,
+            quality=quality,
         )
 
     def stream_chat(self, session_id: str, user_message: str, ctx: RequestContext | None = None) -> Iterable[StreamEvent]:
@@ -169,6 +226,15 @@ class HelmiesAgent:
             yield StreamEvent(type="token", data={"text": chunk})
 
         full_text = "".join(chunks)
+        quality = {
+            "enabled": False,
+            "required_keywords": self.critic.required_keywords_from_prompt(user_message),
+            "attempts": [],
+            "final_score": None,
+            "final_pass": None,
+            "target": float(self.settings.critic_min_score),
+            "mode": "stream_no_repair",
+        }
         yield StreamEvent(type="model_output", data={"text": full_text})
 
         final = self._apply_tools_and_finalize(
@@ -177,6 +243,7 @@ class HelmiesAgent:
             model_output=full_text,
             plan=plan,
             route_policy=route.policy_name,
+            quality=quality,
         )
         yield StreamEvent(
             type="final",
@@ -184,6 +251,7 @@ class HelmiesAgent:
                 "response": final.text,
                 "plan": final.plan,
                 "tools_executed": final.tools_executed,
+                "quality": final.quality,
                 "tenant_id": ctx.tenant_id,
             },
         )

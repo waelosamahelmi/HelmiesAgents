@@ -55,3 +55,4 @@
 - [x] SSO/SAML/OIDC enterprise login
 - [x] policy-as-code DSL
 - [x] advanced eval suites and CI quality gates
+- [x] autonomous critic-repair quality loop
