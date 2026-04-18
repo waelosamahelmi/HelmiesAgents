@@ -7,7 +7,7 @@ HelmiesAgents is a competitive open AI agent platform built for real execution:
 - memory + skills compounding system
 - API + CLI + Web interfaces
 - gateway integrations
-- benchmark, critic quality loop, and enterprise controls
+- benchmark, critic loop, autonomous subruns, and enterprise controls
 
 ## Repo
 
@@ -73,7 +73,7 @@ Change this immediately via `HELMIES_AUTH_USERS_JSON` in production.
 - `POST /auth/sso/saml`
 
 ### Agent
-- `POST /chat` (includes quality metadata from autonomous critic loop)
+- `POST /chat` (includes quality metadata: critic + autonomous subruns)
 - `WS /chat/ws` (true token streaming + final tool-executed response event + quality)
 - `GET /memory/search`
 
@@ -171,6 +171,9 @@ helmiesagents init-project ./my_workspace
 - `HELMIES_CRITIC_ENABLED=true|false` (default: `true`)
 - `HELMIES_CRITIC_MAX_RETRIES=1`
 - `HELMIES_CRITIC_MIN_SCORE=0.7`
+- `HELMIES_AUTONOMOUS_SUBRUNS_ENABLED=true|false` (default: `true`)
+- `HELMIES_AUTONOMOUS_SUBRUNS_MAX=2`
+- `HELMIES_AUTONOMOUS_SUBRUNS_VERIFY=true|false`
 
 ### Auth / Enterprise
 - `HELMIES_JWT_SECRET=***`

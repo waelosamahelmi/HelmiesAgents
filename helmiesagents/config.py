@@ -49,6 +49,11 @@ class Settings:
     critic_max_retries: int = 1
     critic_min_score: float = 0.7
 
+    # autonomous decomposition + subruns
+    autonomous_subruns_enabled: bool = True
+    autonomous_subruns_max: int = 2
+    autonomous_subruns_verify: bool = True
+
     # gateway credentials
     slack_bot_token: str | None = None
     telegram_bot_token: str | None = None
@@ -95,6 +100,9 @@ class Settings:
             critic_enabled=_env_bool("HELMIES_CRITIC_ENABLED", True),
             critic_max_retries=int(os.getenv("HELMIES_CRITIC_MAX_RETRIES", "1")),
             critic_min_score=float(os.getenv("HELMIES_CRITIC_MIN_SCORE", "0.7")),
+            autonomous_subruns_enabled=_env_bool("HELMIES_AUTONOMOUS_SUBRUNS_ENABLED", True),
+            autonomous_subruns_max=int(os.getenv("HELMIES_AUTONOMOUS_SUBRUNS_MAX", "2")),
+            autonomous_subruns_verify=_env_bool("HELMIES_AUTONOMOUS_SUBRUNS_VERIFY", True),
             slack_bot_token=os.getenv("SLACK_BOT_TOKEN"),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
             discord_bot_token=os.getenv("DISCORD_BOT_TOKEN"),

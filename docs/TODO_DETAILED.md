@@ -56,3 +56,4 @@
 - [x] policy-as-code DSL
 - [x] advanced eval suites and CI quality gates
 - [x] autonomous critic-repair quality loop
+- [x] autonomous task decomposition + self-verification subruns

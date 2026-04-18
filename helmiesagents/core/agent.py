@@ -194,15 +194,117 @@ class HelmiesAgent:
         }
         return current, quality
 
+    def _subrun_prompt(self, *, user_message: str, subtask: str) -> str:
+        return (
+            "Investigate subtask and return concise findings.\n"
+            f"Original request: {user_message}\n"
+            f"Subtask: {subtask}\n"
+            "Return only findings relevant to this subtask."
+        )
+
+    def _detect_subtasks(self, user_message: str, plan: list[str]) -> list[str]:
+        text = user_message.strip()
+        lower = text.lower()
+        parts = []
+
+        # simple decomposition heuristics
+        if " and " in lower:
+            parts.extend([p.strip() for p in re.split(r"\band\b", text, flags=re.IGNORECASE) if p.strip()])
+        if "," in text:
+            parts.extend([p.strip() for p in text.split(",") if p.strip()])
+
+        # fallback decomposition only for complex prompts
+        complex_cues = ("analyze", "research", "compare", "strategy", "build", "design", "plan")
+        if not parts and any(c in lower for c in complex_cues):
+            derived = [p for p in plan if p and p.lower().startswith(("collect", "identify", "execute", "validate", "generate"))]
+            parts.extend(derived[:2])
+
+        # dedupe, trim, cap
+        out: list[str] = []
+        seen: set[str] = set()
+        for p in parts:
+            k = p.lower()
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(p)
+        return out[: max(0, int(self.settings.autonomous_subruns_max))]
+
+    def _run_autonomous_subruns(
+        self,
+        *,
+        session_id: str,
+        user_message: str,
+        plan: list[str],
+        system_prompt: str,
+        model_override: str | None,
+    ) -> dict[str, Any]:
+        enabled = bool(self.settings.autonomous_subruns_enabled)
+        result: dict[str, Any] = {
+            "enabled": enabled,
+            "subruns_executed": 0,
+            "subruns": [],
+            "verify_enabled": bool(self.settings.autonomous_subruns_verify),
+        }
+        if not enabled:
+            return result
+
+        subtasks = self._detect_subtasks(user_message, plan)
+        if not subtasks:
+            return result
+
+        for idx, subtask in enumerate(subtasks, start=1):
+            p = self._subrun_prompt(user_message=user_message, subtask=subtask)
+            sub_response = self.provider.generate(system_prompt, p, model_override=model_override)
+
+            verification: dict[str, Any] | None = None
+            if self.settings.autonomous_subruns_verify:
+                verify_keywords = self.critic.required_keywords_from_prompt(subtask)
+                c = self.critic.evaluate(user_message=subtask, response_text=sub_response, required_keywords=verify_keywords)
+                verification = {
+                    "score": c.score,
+                    "pass": c.pass_gate,
+                    "feedback": c.feedback,
+                    "required_keywords": verify_keywords,
+                }
+
+            result["subruns"].append(
+                {
+                    "index": idx,
+                    "subtask": subtask,
+                    "result_preview": sub_response[:400],
+                    "verification": verification,
+                }
+            )
+
+        result["subruns_executed"] = len(result["subruns"])
+        return result
+
     def chat(self, session_id: str, user_message: str, ctx: RequestContext | None = None) -> AgentResponse:
         ctx = ctx or RequestContext()
         plan, prompt, route = self._build_chat_prompt(session_id=session_id, user_message=user_message, ctx=ctx)
+
+        autonomy = self._run_autonomous_subruns(
+            session_id=session_id,
+            user_message=user_message,
+            plan=plan,
+            system_prompt=self._system_prompt(),
+            model_override=route.model,
+        )
+
+        if autonomy["subruns"]:
+            subrun_block = "\n\nSubrun findings:\n" + "\n".join(
+                [f"- [{s['index']}] {s['subtask']}: {s['result_preview']}" for s in autonomy["subruns"]]
+            )
+            prompt = prompt + subrun_block
+
         model_output, quality = self._generate_with_critic(
             system_prompt=self._system_prompt(),
             prompt=prompt,
             user_message=user_message,
             model_override=route.model,
         )
+        quality["autonomy"] = autonomy
         return self._apply_tools_and_finalize(
             session_id=session_id,
             ctx=ctx,
@@ -226,6 +328,13 @@ class HelmiesAgent:
             yield StreamEvent(type="token", data={"text": chunk})
 
         full_text = "".join(chunks)
+        autonomy = self._run_autonomous_subruns(
+            session_id=session_id,
+            user_message=user_message,
+            plan=plan,
+            system_prompt=self._system_prompt(),
+            model_override=route.model,
+        )
         quality = {
             "enabled": False,
             "required_keywords": self.critic.required_keywords_from_prompt(user_message),
@@ -234,6 +343,7 @@ class HelmiesAgent:
             "final_pass": None,
             "target": float(self.settings.critic_min_score),
             "mode": "stream_no_repair",
+            "autonomy": autonomy,
         }
         yield StreamEvent(type="model_output", data={"text": full_text})
 
