@@ -32,6 +32,9 @@ class Settings:
     # optional routing policy file
     routing_policy_file: str | None = None
 
+    # optional policy-as-code DSL file
+    policy_dsl_file: str | None = None
+
     # queue backend
     queue_backend: str = "memory"  # memory | sqlite
     queue_autostart_worker: bool = True
@@ -74,6 +77,7 @@ class Settings:
                 '[{"username":"admin","password": "admin123","roles":["admin"],"tenant_id":"default"}]',
             ),
             routing_policy_file=os.getenv("HELMIES_ROUTING_POLICY_FILE"),
+            policy_dsl_file=os.getenv("HELMIES_POLICY_DSL_FILE"),
             queue_backend=os.getenv("HELMIES_QUEUE_BACKEND", "memory"),
             queue_autostart_worker=_env_bool("HELMIES_QUEUE_AUTOSTART_WORKER", True),
             queue_poll_interval_seconds=float(os.getenv("HELMIES_QUEUE_POLL_INTERVAL_SECONDS", "0.5")),

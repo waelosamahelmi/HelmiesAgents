@@ -98,7 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     agent = HelmiesAgent(settings=settings, memory=memory, tools=registry)
     workflow_engine = WorkflowEngine(agent=agent, memory=memory, settings=settings)
     gateway_router = GatewayRouter(agent=agent)
-    policy = PolicyEngine()
+    policy = PolicyEngine(policy_file=settings.policy_dsl_file)
     approval_manager = ApprovalManager(memory=memory, policy=policy)
     benchmark = BenchmarkHarness(agent=agent, memory=memory)
     auth = AuthService(settings)

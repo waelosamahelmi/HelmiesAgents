@@ -25,7 +25,7 @@ https://github.com/waelosamahelmi/HelmiesAgents
 
 ### Phase 2 — Hardening
 - async workflow execution + cancellation
-- policy-driven approval checks
+- policy-driven approval checks + policy-as-code DSL overrides
 - context compression
 - per-user/per-tenant memory scope
 - model routing policy
@@ -92,6 +92,30 @@ Change this immediately via `HELMIES_AUTH_USERS_JSON` in production.
 - `POST /workflow/worker/run_once` (manual worker tick for sqlite queue)
 - `GET /workflow/runs`
 
+### Policy DSL (YAML)
+Set `HELMIES_POLICY_DSL_FILE` to a YAML file with rule overrides:
+
+```yaml
+version: 1
+rules:
+  - name: deny-docker-rm-force
+    effect: deny       # allow | approve | deny
+    tool: run_shell    # or "*"
+    when:
+      command_regex: '^docker\\s+rm\\s+-f\\b'
+
+  - name: allow-safe-write
+    effect: allow
+    tool: write_file
+    when:
+      path_prefix: '/opt/safe/'
+```
+
+Matching semantics:
+- Rules match by `tool` + `when` conditions (`command_regex`, `path_prefix`, `arg_equals`)
+- Precedence: `deny` > `approve` > `allow`
+- If no DSL rule matches, built-in policy rules still apply
+
 ### Gateways
 - `POST /gateway/send`
 - `POST /gateway/inbound`
@@ -135,6 +159,7 @@ helmiesagents init-project ./my_workspace
 - `HELMIES_DB_PATH=./helmiesagents.db`
 - `HELMIES_WORKSPACE_DIR=./workspace`
 - `HELMIES_ROUTING_POLICY_FILE=./routing_policy.yaml`
+- `HELMIES_POLICY_DSL_FILE=./policy.dsl.yaml`
 - `HELMIES_QUEUE_BACKEND=memory|sqlite` (default: `memory`)
 - `HELMIES_QUEUE_AUTOSTART_WORKER=true|false` (default: `true`)
 - `HELMIES_QUEUE_POLL_INTERVAL_SECONDS=0.5`

@@ -23,6 +23,11 @@ class ApprovalManager:
 
     def check_or_create(self, ctx: RequestContext, tool: str, args: dict[str, Any]) -> ApprovalOutcome:
         decision = self.policy.evaluate(tool, args)
+
+        # Explicit deny cannot be bypassed by role/auto-approve.
+        if decision.blocked:
+            return ApprovalOutcome(approved=False, reason=decision.reason)
+
         if not decision.requires_approval:
             return ApprovalOutcome(approved=True)
 

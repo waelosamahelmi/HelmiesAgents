@@ -34,7 +34,7 @@ def _build_runtime() -> tuple[Settings, HelmiesAgent, MemoryStore, WorkflowEngin
     install_builtin_tools(tools, memory)
     agent = HelmiesAgent(settings=settings, memory=memory, tools=tools)
     workflow = WorkflowEngine(agent=agent, memory=memory, settings=settings)
-    approvals = ApprovalManager(memory=memory, policy=PolicyEngine())
+    approvals = ApprovalManager(memory=memory, policy=PolicyEngine(policy_file=settings.policy_dsl_file))
     benchmark = BenchmarkHarness(agent=agent, memory=memory)
     return settings, agent, memory, workflow, approvals, benchmark
 

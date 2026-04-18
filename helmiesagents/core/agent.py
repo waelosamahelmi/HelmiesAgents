@@ -39,7 +39,7 @@ class HelmiesAgent:
         self.memory = memory
         self.tools = tools
         self.provider = build_provider(settings)
-        self.policy = PolicyEngine()
+        self.policy = PolicyEngine(policy_file=settings.policy_dsl_file)
         self.compressor = ContextCompressor()
         self.router = ModelRouter(default_model=settings.openai_model, policy_file=settings.routing_policy_file)
 
@@ -92,6 +92,18 @@ class HelmiesAgent:
                     args = {}
 
                 decision = self.policy.evaluate(name, args)
+                if decision.blocked:
+                    output_text += f"\n\n[tool:{name} denied] {decision.reason}"
+                    tools_executed.append(
+                        {
+                            "tool": name,
+                            "args": args,
+                            "denied": True,
+                            "reason": decision.reason,
+                        }
+                    )
+                    continue
+
                 if decision.requires_approval and not (ctx.auto_approve or "admin" in ctx.roles):
                     output_text += f"\n\n[tool:{name} approval_required] {decision.reason}"
                     tools_executed.append(
