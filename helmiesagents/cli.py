@@ -33,7 +33,7 @@ def _build_runtime() -> tuple[Settings, HelmiesAgent, MemoryStore, WorkflowEngin
     tools = ToolRegistry()
     install_builtin_tools(tools, memory)
     agent = HelmiesAgent(settings=settings, memory=memory, tools=tools)
-    workflow = WorkflowEngine(agent=agent, memory=memory)
+    workflow = WorkflowEngine(agent=agent, memory=memory, settings=settings)
     approvals = ApprovalManager(memory=memory, policy=PolicyEngine())
     benchmark = BenchmarkHarness(agent=agent, memory=memory)
     return settings, agent, memory, workflow, approvals, benchmark
@@ -114,7 +114,7 @@ def run_workflow_async(
 @app.command("job-status")
 def job_status(job_id: str):
     _, _, _, wf, _, _ = _build_runtime()
-    job = wf.async_exec.get_job(job_id)
+    job = wf.get_job(job_id)
     if not job:
         console.print("job not found")
         raise typer.Exit(code=1)
@@ -124,8 +124,25 @@ def job_status(job_id: str):
 @app.command("job-cancel")
 def job_cancel(job_id: str):
     _, _, _, wf, _, _ = _build_runtime()
-    ok = wf.async_exec.cancel(job_id)
+    ok = wf.cancel_job(job_id)
     console.print({"ok": ok})
+
+
+@app.command("jobs")
+def jobs(
+    limit: int = typer.Option(50, "--limit"),
+    status: str = typer.Option("", "--status"),
+):
+    _, _, _, wf, _, _ = _build_runtime()
+    rows = wf.list_jobs(limit=limit, status=status or None)
+    console.print_json(json.dumps({"backend": wf.queue_backend, "jobs": [j.__dict__ for j in rows]}))
+
+
+@app.command("queue-run-once")
+def queue_run_once(worker_id: str = typer.Option("cli-manual", "--worker-id")):
+    _, _, _, wf, _, _ = _build_runtime()
+    processed = wf.process_queue_once(worker_id=worker_id)
+    console.print({"backend": wf.queue_backend, "processed": processed})
 
 
 @app.command("memory-search")

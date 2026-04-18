@@ -87,7 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     registry = ToolRegistry()
     install_builtin_tools(registry, memory)
     agent = HelmiesAgent(settings=settings, memory=memory, tools=registry)
-    workflow_engine = WorkflowEngine(agent=agent, memory=memory)
+    workflow_engine = WorkflowEngine(agent=agent, memory=memory, settings=settings)
     gateway_router = GatewayRouter(agent=agent)
     policy = PolicyEngine()
     approval_manager = ApprovalManager(memory=memory, policy=policy)
@@ -225,15 +225,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/workflow/job/{job_id}")
     def workflow_job(job_id: str) -> dict[str, Any]:
-        job = workflow_engine.async_exec.get_job(job_id)
+        job = workflow_engine.get_job(job_id)
         if not job:
             raise HTTPException(status_code=404, detail="job not found")
         return job.__dict__
 
     @app.post("/workflow/job/{job_id}/cancel")
     def workflow_job_cancel(job_id: str) -> dict[str, Any]:
-        ok = workflow_engine.async_exec.cancel(job_id)
+        ok = workflow_engine.cancel_job(job_id)
         return {"ok": ok}
+
+    @app.get("/workflow/jobs")
+    def workflow_jobs(limit: int = 100, status: str | None = None) -> dict[str, Any]:
+        jobs = workflow_engine.list_jobs(limit=limit, status=status)
+        return {"jobs": [j.__dict__ for j in jobs], "backend": workflow_engine.queue_backend}
+
+    @app.post("/workflow/worker/run_once")
+    def workflow_worker_run_once(worker_id: str = "api-manual") -> dict[str, Any]:
+        processed = workflow_engine.process_queue_once(worker_id=worker_id)
+        return {"processed": processed, "backend": workflow_engine.queue_backend}
 
     @app.get("/workflow/runs")
     def list_workflow_runs(limit: int = 100, authorization: str | None = Header(default=None)) -> dict[str, Any]:

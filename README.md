@@ -86,6 +86,8 @@ Change this immediately via `HELMIES_AUTH_USERS_JSON` in production.
 - `POST /workflow/run_async`
 - `GET /workflow/job/{job_id}`
 - `POST /workflow/job/{job_id}/cancel`
+- `GET /workflow/jobs` (queue backlog/status view)
+- `POST /workflow/worker/run_once` (manual worker tick for sqlite queue)
 - `GET /workflow/runs`
 
 ### Gateways
@@ -125,12 +127,15 @@ helmiesagents init-project ./my_workspace
 
 ### Core
 - `HELMIES_PROVIDER=auto|openai`
-- `OPENAI_API_KEY=...`
+- `OPENAI_API_KEY=***
 - `OPENAI_BASE_URL=https://api.openai.com/v1`
 - `OPENAI_MODEL=gpt-4o-mini`
 - `HELMIES_DB_PATH=./helmiesagents.db`
 - `HELMIES_WORKSPACE_DIR=./workspace`
 - `HELMIES_ROUTING_POLICY_FILE=./routing_policy.yaml`
+- `HELMIES_QUEUE_BACKEND=memory|sqlite` (default: `memory`)
+- `HELMIES_QUEUE_AUTOSTART_WORKER=true|false` (default: `true`)
+- `HELMIES_QUEUE_POLL_INTERVAL_SECONDS=0.5`
 
 ### Auth / Enterprise
 - `HELMIES_JWT_SECRET=change-me`

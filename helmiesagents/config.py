@@ -5,6 +5,13 @@ import os
 from pathlib import Path
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass
 class Settings:
     provider: str = "auto"
@@ -20,10 +27,15 @@ class Settings:
 
     # auth + tenancy
     jwt_secret: str = "change-me-dev-secret"
-    auth_users_json: str = '[{"username":"admin","password":"admin123","roles":["admin"],"tenant_id":"default"}]'
+    auth_users_json: str = '[{"username":"admin","password": "admin123","roles":["admin"],"tenant_id":"default"}]'
 
     # optional routing policy file
     routing_policy_file: str | None = None
+
+    # queue backend
+    queue_backend: str = "memory"  # memory | sqlite
+    queue_autostart_worker: bool = True
+    queue_poll_interval_seconds: float = 0.5
 
     # gateway credentials
     slack_bot_token: str | None = None
@@ -52,9 +64,12 @@ class Settings:
             jwt_secret=os.getenv("HELMIES_JWT_SECRET", "change-me-dev-secret"),
             auth_users_json=os.getenv(
                 "HELMIES_AUTH_USERS_JSON",
-                '[{"username":"admin","password":"admin123","roles":["admin"],"tenant_id":"default"}]',
+                '[{"username":"admin","password": "admin123","roles":["admin"],"tenant_id":"default"}]',
             ),
             routing_policy_file=os.getenv("HELMIES_ROUTING_POLICY_FILE"),
+            queue_backend=os.getenv("HELMIES_QUEUE_BACKEND", "memory"),
+            queue_autostart_worker=_env_bool("HELMIES_QUEUE_AUTOSTART_WORKER", True),
+            queue_poll_interval_seconds=float(os.getenv("HELMIES_QUEUE_POLL_INTERVAL_SECONDS", "0.5")),
             slack_bot_token=os.getenv("SLACK_BOT_TOKEN"),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
             discord_bot_token=os.getenv("DISCORD_BOT_TOKEN"),

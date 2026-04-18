@@ -13,7 +13,7 @@ def test_workflow_runs(tmp_path):
     reg = ToolRegistry()
     install_builtin_tools(reg, memory)
     agent = HelmiesAgent(settings=settings, memory=memory, tools=reg)
-    engine = WorkflowEngine(agent=agent, memory=memory)
+    engine = WorkflowEngine(agent=agent, memory=memory, settings=settings)
 
     wf = tmp_path / "wf.yaml"
     wf.write_text(
