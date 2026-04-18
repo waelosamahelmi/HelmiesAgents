@@ -52,6 +52,6 @@
 
 - [x] true websocket streaming responses
 - [x] distributed task queue (Celery/Arq/RQ)
-- [ ] SSO/SAML/OIDC enterprise login
+- [x] SSO/SAML/OIDC enterprise login
 - [ ] policy-as-code DSL
 - [ ] advanced eval suites and CI quality gates

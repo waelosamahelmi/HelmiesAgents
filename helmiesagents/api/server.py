@@ -24,6 +24,7 @@ from helmiesagents.models import RequestContext, is_admin
 from helmiesagents.scim.service import ScimService, ScimUser
 from helmiesagents.security.auth import AuthService
 from helmiesagents.security.policy import PolicyEngine
+from helmiesagents.security.sso import SSOAuthService
 from helmiesagents.security.vault import SecretsVault
 from helmiesagents.tools.builtin import install_builtin_tools
 from helmiesagents.tools.registry import ToolRegistry
@@ -33,6 +34,14 @@ from helmiesagents.workflow.engine import WorkflowEngine
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class OIDCLoginRequest(BaseModel):
+    id_token: str
+
+
+class SAMLLoginRequest(BaseModel):
+    assertion_b64: str
 
 
 class ChatRequest(BaseModel):
@@ -92,7 +101,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     policy = PolicyEngine()
     approval_manager = ApprovalManager(memory=memory, policy=policy)
     benchmark = BenchmarkHarness(agent=agent, memory=memory)
-    auth = AuthService(settings=settings)
+    auth = AuthService(settings)
+    sso = SSOAuthService(settings)
     scim = ScimService(memory=memory)
 
     vault = SecretsVault(settings.vault_key) if settings.vault_key else None
@@ -133,6 +143,46 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=401, detail="invalid credentials")
         token = auth.create_token(ctx)
         return {"access_token": token, "token_type": "bearer", "tenant_id": ctx.tenant_id, "roles": ctx.roles}
+
+    @app.post("/auth/sso/oidc")
+    def login_sso_oidc(req: OIDCLoginRequest) -> dict[str, Any]:
+        try:
+            sso_result = sso.login_oidc(req.id_token)
+        except Exception as e:
+            if "disabled" in str(e).lower():
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            raise HTTPException(status_code=401, detail=f"invalid oidc login: {e}") from e
+
+        ctx = sso.to_context(sso_result)
+        token = auth.create_token(ctx)
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "tenant_id": ctx.tenant_id,
+            "roles": ctx.roles,
+            "provider": sso_result.provider,
+            "subject": sso_result.subject,
+        }
+
+    @app.post("/auth/sso/saml")
+    def login_sso_saml(req: SAMLLoginRequest) -> dict[str, Any]:
+        try:
+            sso_result = sso.login_saml(req.assertion_b64)
+        except Exception as e:
+            if "disabled" in str(e).lower():
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            raise HTTPException(status_code=401, detail=f"invalid saml login: {e}") from e
+
+        ctx = sso.to_context(sso_result)
+        token = auth.create_token(ctx)
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "tenant_id": ctx.tenant_id,
+            "roles": ctx.roles,
+            "provider": sso_result.provider,
+            "subject": sso_result.subject,
+        }
 
     @app.post("/chat")
     def chat(req: ChatRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:

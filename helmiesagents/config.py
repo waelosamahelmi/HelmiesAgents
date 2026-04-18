@@ -50,6 +50,13 @@ class Settings:
     # secrets vault
     vault_key: str | None = None
 
+    # sso
+    sso_enabled: bool = False
+    sso_oidc_issuer: str | None = None
+    sso_oidc_audience: str | None = None
+    sso_oidc_jwt_secret: str | None = None
+    sso_saml_expected_issuer: str | None = None
+
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
@@ -77,6 +84,11 @@ class Settings:
             whatsapp_token=os.getenv("WHATSAPP_TOKEN"),
             scim_token=os.getenv("HELMIES_SCIM_TOKEN", "change-me-scim-token"),
             vault_key=os.getenv("HELMIES_VAULT_KEY"),
+            sso_enabled=_env_bool("HELMIES_SSO_ENABLED", False),
+            sso_oidc_issuer=os.getenv("HELMIES_SSO_OIDC_ISSUER"),
+            sso_oidc_audience=os.getenv("HELMIES_SSO_OIDC_AUDIENCE"),
+            sso_oidc_jwt_secret=os.getenv("HELMIES_SSO_OIDC_JWT_SECRET"),
+            sso_saml_expected_issuer=os.getenv("HELMIES_SSO_SAML_EXPECTED_ISSUER"),
         )
 
     def ensure_dirs(self) -> None:

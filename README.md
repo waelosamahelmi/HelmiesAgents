@@ -69,6 +69,8 @@ Change this immediately via `HELMIES_AUTH_USERS_JSON` in production.
 
 ### Auth
 - `POST /auth/login`
+- `POST /auth/sso/oidc`
+- `POST /auth/sso/saml`
 
 ### Agent
 - `POST /chat`
@@ -138,10 +140,15 @@ helmiesagents init-project ./my_workspace
 - `HELMIES_QUEUE_POLL_INTERVAL_SECONDS=0.5`
 
 ### Auth / Enterprise
-- `HELMIES_JWT_SECRET=change-me`
+- `HELMIES_JWT_SECRET=***`
 - `HELMIES_AUTH_USERS_JSON='[{"username":"admin","password":"admin123","roles":["admin"],"tenant_id":"default"}]'`
 - `HELMIES_SCIM_TOKEN=change-me-scim-token`
 - `HELMIES_VAULT_KEY=change-me-vault-key`
+- `HELMIES_SSO_ENABLED=true|false`
+- `HELMIES_SSO_OIDC_ISSUER=https://idp.example.com`
+- `HELMIES_SSO_OIDC_AUDIENCE=helmiesagents`
+- `HELMIES_SSO_OIDC_JWT_SECRET=***`
+- `HELMIES_SSO_SAML_EXPECTED_ISSUER=urn:test:idp`
 
 ### Gateways
 - `SLACK_BOT_TOKEN=...`
