@@ -35,9 +35,18 @@ All requested phases have been implemented in this repository as a production-fo
 - encrypted vault secret storage
 - deployment blueprint documentation
 
+### Workforce Extension (post-phase enhancement)
+- role+cv suggestion endpoint
+- hire/list workforce agents endpoints
+- slack manifest generator endpoint
+- workforce tasks create/list/run endpoints
+- collaborator-assisted execution synthesis
+- WebUI workforce management controls
+
 ## Validation
 - unit tests passing
 - CLI smoke tests
 - workflow execution sync and async
 - benchmark run + listing
 - auth and role checks
+- workforce API tests (suggest/hire/manifest/task-run)

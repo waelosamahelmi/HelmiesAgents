@@ -24,11 +24,13 @@ HelmiesAgents follows a layered architecture:
    - memory store
    - session archive
    - skill store
+   - workforce store (hired agents, team tasks)
 
 5. Integrations
    - model providers
    - external APIs
    - messaging platforms
+   - Slack manifest generation for workforce deployment
 
 ## Core loop
 
@@ -80,3 +82,5 @@ Each node supports:
 - role-specialized subagents
 - vector retrieval augmentation
 - tenant isolation and policy sandboxing
+- workforce communication bus (agent-to-agent protocol)
+- per-agent provider/model policy routing

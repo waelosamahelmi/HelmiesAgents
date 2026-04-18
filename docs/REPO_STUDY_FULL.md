@@ -101,3 +101,8 @@ This file captures practical takeaways from each repository and how HelmiesAgent
 - Good: practical integrations and broad feature set.
 - Bad: maintainability/security risks from reverse-engineered stacks.
 - Action: implement natively instead of coupling to forks.
+
+21) onyx (requested reference direction)
+- Good: strong enterprise knowledge-work UI patterns and admin controls.
+- Bad: broad scope can over-expand implementation if copied blindly.
+- Action: adapt control-plane ideas (management dashboard, role/team controls) into HelmiesAgents workforce panel while keeping core runtime lean.

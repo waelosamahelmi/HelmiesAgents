@@ -29,6 +29,7 @@ from helmiesagents.security.vault import SecretsVault
 from helmiesagents.tools.builtin import install_builtin_tools
 from helmiesagents.tools.registry import ToolRegistry
 from helmiesagents.workflow.engine import WorkflowEngine
+from helmiesagents.workforce import WorkforceService
 
 
 class LoginRequest(BaseModel):
@@ -93,6 +94,41 @@ class SecretRequest(BaseModel):
     value: str
 
 
+class WorkforceSuggestRequest(BaseModel):
+    name: str | None = None
+    job_title: str
+    cv_text: str = ""
+
+
+class WorkforceHireRequest(BaseModel):
+    name: str
+    job_title: str
+    description: str
+    system_prompt: str
+    cv_text: str = ""
+    skills: list[str] = []
+    slack_channels: list[str] = []
+
+
+class WorkforceTaskRequest(BaseModel):
+    title: str
+    description: str
+    assignee_agent_id: int | None = None
+    collaborator_agent_ids: list[int] = []
+    priority: str = "medium"
+
+
+class WorkforceTaskRunRequest(BaseModel):
+    task_id: int
+
+
+class SlackManifestRequest(BaseModel):
+    app_name: str
+    bot_display_name: str
+    request_url: str
+    redirect_urls: list[str] = []
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     settings.ensure_dirs()
@@ -109,6 +145,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     auth = AuthService(settings)
     sso = SSOAuthService(settings)
     scim = ScimService(memory=memory)
+    workforce = WorkforceService(memory=memory)
 
     vault = SecretsVault(settings.vault_key) if settings.vault_key else None
 
@@ -498,6 +535,92 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not row:
             raise HTTPException(status_code=404, detail="secret not found")
         return {"key": key, "value": vault.decrypt(row["value_enc"])}
+
+    @app.post("/workforce/suggest")
+    def workforce_suggest(req: WorkforceSuggestRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        _ = get_ctx(authorization)
+        suggestion = workforce.suggest_profile(name=req.name, job_title=req.job_title, cv_text=req.cv_text)
+        return {
+            "suggested_name": suggestion.suggested_name,
+            "job_title": suggestion.job_title,
+            "summary": suggestion.summary,
+            "system_prompt": suggestion.system_prompt,
+            "recommended_skills": suggestion.recommended_skills,
+        }
+
+    @app.post("/workforce/hire")
+    def workforce_hire(req: WorkforceHireRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        if not is_admin(ctx):
+            raise HTTPException(status_code=403, detail="admin required")
+
+        agent_id = workforce.hire_agent(
+            tenant_id=ctx.tenant_id,
+            name=req.name,
+            job_title=req.job_title,
+            description=req.description,
+            system_prompt=req.system_prompt,
+            cv_text=req.cv_text,
+            skills=req.skills,
+            slack_channels=req.slack_channels,
+        )
+        memory.log_audit(
+            tenant_id=ctx.tenant_id,
+            user_id=ctx.user_id,
+            event_type="workforce_hire",
+            payload_json=json.dumps({"agent_id": agent_id, "name": req.name, "job_title": req.job_title}),
+        )
+        return {"ok": True, "agent_id": agent_id}
+
+    @app.get("/workforce/agents")
+    def workforce_agents(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        return {"agents": workforce.list_agents(ctx.tenant_id)}
+
+    @app.post("/workforce/manifest/slack")
+    def workforce_manifest_slack(req: SlackManifestRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        if not is_admin(ctx):
+            raise HTTPException(status_code=403, detail="admin required")
+        manifest = workforce.build_slack_manifest(
+            app_name=req.app_name,
+            bot_display_name=req.bot_display_name,
+            request_url=req.request_url,
+            redirect_urls=req.redirect_urls,
+        )
+        return {"manifest": manifest}
+
+    @app.post("/workforce/tasks")
+    def workforce_create_task(req: WorkforceTaskRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        task_id = workforce.create_task(
+            tenant_id=ctx.tenant_id,
+            created_by=ctx.user_id,
+            title=req.title,
+            description=req.description,
+            assignee_agent_id=req.assignee_agent_id,
+            collaborator_agent_ids=req.collaborator_agent_ids,
+            priority=req.priority,
+        )
+        return {"ok": True, "task_id": task_id}
+
+    @app.get("/workforce/tasks")
+    def workforce_tasks(status: str | None = None, limit: int = 200, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        return {"tasks": workforce.list_tasks(tenant_id=ctx.tenant_id, status=status, limit=limit)}
+
+    @app.post("/workforce/tasks/run")
+    def workforce_run_task(req: WorkforceTaskRunRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        if not is_admin(ctx):
+            raise HTTPException(status_code=403, detail="admin required")
+        result = workforce.run_task(
+            agent=agent,
+            tenant_id=ctx.tenant_id,
+            task_id=req.task_id,
+            actor_user_id=ctx.user_id,
+        )
+        return {"ok": True, "result": result}
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:

@@ -5,23 +5,79 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>HelmiesAgents</title>
   <style>
-    body { font-family: Inter, Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 0 16px; background:#0b0f14; color:#e8edf2; }
+    :root {
+      --bg:#0b0f14;
+      --panel:#101722;
+      --muted:#9eb0c1;
+      --line:#243243;
+      --line2:#2b3b4d;
+      --text:#e8edf2;
+      --accent:#2563eb;
+      --ok:#22c55e;
+      --warn:#f59e0b;
+    }
+    * { box-sizing:border-box; }
+    body {
+      font-family: Inter, Arial, sans-serif;
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 0 16px;
+      background:var(--bg);
+      color:var(--text);
+    }
     h1 { margin: 8px 0 2px; }
-    .sub { color:#9eb0c1; margin-bottom: 16px; }
-    .card { border:1px solid #243243; border-radius:12px; padding:12px; margin: 10px 0; background:#101722; }
-    textarea,input,button,select { width:100%; padding:10px; border-radius:8px; border:1px solid #2b3b4d; background:#0f1621; color:#e8edf2; }
-    button { cursor:pointer; background:#2563eb; border:none; font-weight:600; }
-    pre { white-space: pre-wrap; word-wrap: break-word; max-height: 45vh; overflow:auto; }
+    h3 { margin: 6px 0 10px; }
+    .sub { color:var(--muted); margin-bottom: 16px; }
+    .card {
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:12px;
+      margin: 10px 0;
+      background:var(--panel);
+    }
+    textarea,input,button,select {
+      width:100%;
+      padding:10px;
+      border-radius:8px;
+      border:1px solid var(--line2);
+      background:#0f1621;
+      color:var(--text);
+      font-size:14px;
+    }
+    button {
+      cursor:pointer;
+      background:var(--accent);
+      border:none;
+      font-weight:600;
+      color:white;
+    }
+    button.secondary { background:#334155; }
+    button.success { background:var(--ok); }
+    button.warn { background:var(--warn); color:#111827; }
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      max-height: 45vh;
+      overflow:auto;
+      background:#0f1621;
+      border:1px solid var(--line2);
+      border-radius:10px;
+      padding:10px;
+    }
     .row { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
     .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; }
+    .row4 { display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px; }
     .tabs button { margin-right:8px; width:auto; padding:8px 12px; }
+    .muted { color:var(--muted); font-size:13px; }
+    .split { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
   </style>
 </head>
 <body>
   <h1>HelmiesAgents</h1>
-  <div class="sub">All phases edition: auth, chat, workflows, benchmark, audit, gateways</div>
+  <div class="sub">HelmiesAI platform panel: auth, chat, workflows, budget, workforce team hiring, Slack manifest, and benchmarks.</div>
 
   <div class="card">
+    <h3>Auth</h3>
     <div class="row3">
       <input id="username" placeholder="username" value="admin" />
       <input id="password" placeholder="password" value="admin123" />
@@ -31,6 +87,7 @@
   </div>
 
   <div class="card">
+    <h3>Quick Actions</h3>
     <div class="tabs">
       <button onclick="health()">Health</button>
       <button onclick="sendChat()">Chat</button>
@@ -45,7 +102,78 @@
       <input id="session" placeholder="session id" value="web-default" />
       <input id="workflowPath" placeholder="workflow path" value="examples/workflows/research_and_report.yaml" />
     </div>
-    <textarea id="msg" rows="5" placeholder="Ask HelmiesAgents anything...">what time is it</textarea>
+    <textarea id="msg" rows="4" placeholder="Ask HelmiesAgents anything...">what time is it</textarea>
+  </div>
+
+  <div class="card">
+    <h3>Workforce (Agent Teams)</h3>
+    <div class="muted">Hire role-based agents, generate system prompts from job title + CV, create team tasks, and run them.</div>
+
+    <div class="split" style="margin-top:10px;">
+      <div>
+        <h4>Suggest profile</h4>
+        <div class="row">
+          <input id="wfSuggestName" placeholder="name (optional)" value="" />
+          <input id="wfSuggestRole" placeholder="job title" value="Senior Marketing Manager" />
+        </div>
+        <textarea id="wfSuggestCV" rows="4" placeholder="Paste CV/resume text for better prompt suggestion"></textarea>
+        <div class="row" style="margin-top:8px;">
+          <button class="secondary" onclick="workforceSuggest()">Suggest Profile</button>
+          <button onclick="workforceApplySuggestion()">Apply Suggestion To Hire Form</button>
+        </div>
+      </div>
+
+      <div>
+        <h4>Hire agent</h4>
+        <div class="row">
+          <input id="wfHireName" placeholder="Agent name" />
+          <input id="wfHireRole" placeholder="Job title" />
+        </div>
+        <textarea id="wfHireDesc" rows="2" placeholder="Role description"></textarea>
+        <textarea id="wfHirePrompt" rows="4" placeholder="System prompt"></textarea>
+        <div class="row">
+          <input id="wfHireSkills" placeholder="skills comma separated" value="" />
+          <input id="wfHireChannels" placeholder="slack channels comma separated (#sales,#marketing)" value="" />
+        </div>
+        <button class="success" style="margin-top:8px;" onclick="workforceHire()">Hire Agent</button>
+      </div>
+    </div>
+
+    <div class="split" style="margin-top:12px;">
+      <div>
+        <h4>Team task</h4>
+        <input id="wfTaskTitle" placeholder="Task title" value="Plan launch campaign for new product" />
+        <textarea id="wfTaskDesc" rows="3" placeholder="Task details"></textarea>
+        <div class="row3">
+          <input id="wfTaskAssignee" placeholder="Assignee Agent ID" value="" />
+          <input id="wfTaskCollabs" placeholder="Collaborator IDs comma separated" value="" />
+          <select id="wfTaskPriority">
+            <option value="low">low</option>
+            <option value="medium" selected>medium</option>
+            <option value="high">high</option>
+            <option value="urgent">urgent</option>
+          </select>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button onclick="workforceCreateTask()">Create Task</button>
+          <button class="warn" onclick="workforceRunTask()">Run Task</button>
+        </div>
+        <input id="wfRunTaskId" placeholder="Task ID to run" style="margin-top:8px;" />
+      </div>
+
+      <div>
+        <h4>Slack manifest</h4>
+        <input id="wfSlackAppName" placeholder="Slack app name" value="HelmiesAI-Agent" />
+        <input id="wfSlackBotName" placeholder="Bot display name" value="Helmies Agent" style="margin-top:8px;" />
+        <input id="wfSlackRequestUrl" placeholder="Request URL (gateway endpoint)" value="https://example.com/gateway/inbound" style="margin-top:8px;" />
+        <input id="wfSlackRedirects" placeholder="Redirect URLs comma separated" style="margin-top:8px;" />
+        <div class="row" style="margin-top:8px;">
+          <button onclick="workforceManifest()">Generate Manifest</button>
+          <button class="secondary" onclick="workforceListAgents()">List Agents</button>
+        </div>
+        <button class="secondary" style="margin-top:8px;" onclick="workforceListTasks()">List Tasks</button>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -60,6 +188,7 @@
 
   <script>
     let token = null;
+    let lastSuggestion = null;
 
     function authHeaders(){
       const h = {'Content-Type':'application/json'};
@@ -75,6 +204,19 @@
       try { data = await res.json(); } catch { data = {raw: await res.text()}; }
       if (!res.ok) throw data;
       return data;
+    }
+
+    function toList(csv) {
+      return (csv || '')
+        .split(',')
+        .map(x => x.trim())
+        .filter(Boolean);
+    }
+
+    function toIntList(csv) {
+      return toList(csv)
+        .map(x => parseInt(x, 10))
+        .filter(x => Number.isInteger(x));
     }
 
     async function login(){
@@ -171,6 +313,110 @@
     async function listAudit(){
       try{ out.textContent = JSON.stringify(await api('/audit/logs'),null,2); }
       catch(e){ out.textContent = JSON.stringify(e,null,2); }
+    }
+
+    async function workforceSuggest() {
+      try {
+        const data = await api('/workforce/suggest','POST',{
+          name: wfSuggestName.value || null,
+          job_title: wfSuggestRole.value,
+          cv_text: wfSuggestCV.value,
+        });
+        lastSuggestion = data;
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    function workforceApplySuggestion() {
+      if (!lastSuggestion) {
+        out.textContent = JSON.stringify({error:'No suggestion yet. Click Suggest Profile first.'}, null, 2);
+        return;
+      }
+      wfHireName.value = lastSuggestion.suggested_name || '';
+      wfHireRole.value = lastSuggestion.job_title || '';
+      wfHirePrompt.value = lastSuggestion.system_prompt || '';
+      wfHireSkills.value = (lastSuggestion.recommended_skills || []).join(', ');
+      if (!wfHireDesc.value) {
+        wfHireDesc.value = lastSuggestion.summary || '';
+      }
+      out.textContent = JSON.stringify({ok:true, applied:true}, null, 2);
+    }
+
+    async function workforceHire() {
+      try {
+        const data = await api('/workforce/hire','POST',{
+          name: wfHireName.value,
+          job_title: wfHireRole.value,
+          description: wfHireDesc.value,
+          system_prompt: wfHirePrompt.value,
+          cv_text: wfSuggestCV.value || '',
+          skills: toList(wfHireSkills.value),
+          slack_channels: toList(wfHireChannels.value),
+        });
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function workforceListAgents() {
+      try {
+        const data = await api('/workforce/agents');
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function workforceCreateTask() {
+      try {
+        const data = await api('/workforce/tasks','POST',{
+          title: wfTaskTitle.value,
+          description: wfTaskDesc.value,
+          assignee_agent_id: wfTaskAssignee.value ? parseInt(wfTaskAssignee.value, 10) : null,
+          collaborator_agent_ids: toIntList(wfTaskCollabs.value),
+          priority: wfTaskPriority.value,
+        });
+        out.textContent = JSON.stringify(data, null, 2);
+        if (data.task_id) wfRunTaskId.value = String(data.task_id);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function workforceRunTask() {
+      try {
+        const taskId = parseInt(wfRunTaskId.value, 10);
+        const data = await api('/workforce/tasks/run','POST',{ task_id: taskId });
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function workforceListTasks() {
+      try {
+        const data = await api('/workforce/tasks');
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function workforceManifest() {
+      try {
+        const data = await api('/workforce/manifest/slack','POST',{
+          app_name: wfSlackAppName.value,
+          bot_display_name: wfSlackBotName.value,
+          request_url: wfSlackRequestUrl.value,
+          redirect_urls: toList(wfSlackRedirects.value),
+        });
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
     }
   </script>
 </body>

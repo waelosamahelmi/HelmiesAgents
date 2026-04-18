@@ -46,6 +46,14 @@ https://github.com/waelosamahelmi/HelmiesAgents
 - encrypted secrets vault integration
 - deployment blueprints documentation
 
+### Workforce / Team Mode (extended)
+- job-title + CV based agent profile suggestion
+- “hire agent” flow with stored role prompt + skills
+- Slack manifest generator per hired agent
+- team task model with assignee + collaborator agents
+- multi-agent task execution and synthesis endpoint
+- WebUI management panel for workforce operations
+
 ## Quickstart
 
 ```bash
@@ -55,6 +63,21 @@ source .venv/bin/activate
 pip install -e .[dev]
 pytest -q
 helmiesagents serve --host 0.0.0.0 --port 8787
+```
+
+Quick API smoke test (workforce):
+
+```bash
+# login
+TOKEN=$(curl -s -X POST http://localhost:8787/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin123"}' | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# suggest profile
+curl -s -X POST http://localhost:8787/workforce/suggest \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"job_title":"Senior Marketing Manager","cv_text":"8 years growth and B2B pipeline"}'
 ```
 
 Open http://localhost:8787
@@ -77,6 +100,15 @@ Change this immediately via `HELMIES_AUTH_USERS_JSON` in production.
 - `WS /chat/ws` (true token streaming + final tool-executed response event + quality)
 - `GET /execution/budget/effective`
 - `GET /memory/search`
+
+### Workforce (Agent Teams)
+- `POST /workforce/suggest` (job title + CV -> suggested candidate profile + system prompt + skills)
+- `POST /workforce/hire`
+- `GET /workforce/agents`
+- `POST /workforce/tasks`
+- `GET /workforce/tasks`
+- `POST /workforce/tasks/run` (multi-agent execution: assignee + collaborators)
+- `POST /workforce/manifest/slack` (generate Slack app manifest for hired agent)
 
 ### Skills
 - `GET /skills`
@@ -197,6 +229,7 @@ helmiesagents init-project ./my_workspace
 
 ## Docs
 
+- `docs/BRIEF_EXECUTION_SPEC.md` (mapped directly from original user brief)
 - `docs/VISION.md`
 - `docs/ARCHITECTURE.md`
 - `docs/DIRECTIONS.md`

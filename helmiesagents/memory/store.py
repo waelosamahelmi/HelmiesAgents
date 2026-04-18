@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -153,6 +154,44 @@ class MemoryStore:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     UNIQUE(tenant_id, key)
+                )
+                """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS workforce_agents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    job_title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    system_prompt TEXT NOT NULL,
+                    cv_text TEXT NOT NULL,
+                    skills_json TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    slack_channels_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS workforce_tasks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    assignee_agent_id INTEGER,
+                    collaborator_agent_ids_json TEXT NOT NULL,
+                    priority TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    result_json TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
                 )
                 """
             )
@@ -323,3 +362,183 @@ class MemoryStore:
                     (tenant_id, limit),
                 ).fetchall()
         return [dict(r) for r in rows]
+
+    # Workforce / agent team management
+    def create_workforce_agent(
+        self,
+        *,
+        tenant_id: str,
+        name: str,
+        job_title: str,
+        description: str,
+        system_prompt: str,
+        cv_text: str,
+        skills: list[str],
+        status: str = "hired",
+        slack_channels: list[str] | None = None,
+    ) -> int:
+        now = datetime.utcnow().isoformat()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO workforce_agents(
+                    tenant_id, name, job_title, description, system_prompt, cv_text,
+                    skills_json, status, slack_channels_json, created_at, updated_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    tenant_id,
+                    name,
+                    job_title,
+                    description,
+                    system_prompt,
+                    cv_text,
+                    json.dumps(skills or []),
+                    status,
+                    json.dumps(slack_channels or []),
+                    now,
+                    now,
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def list_workforce_agents(self, tenant_id: str) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM workforce_agents WHERE tenant_id=? ORDER BY id DESC",
+                (tenant_id,),
+            ).fetchall()
+
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            row = dict(r)
+            row["skills"] = json.loads(row.get("skills_json") or "[]")
+            row["slack_channels"] = json.loads(row.get("slack_channels_json") or "[]")
+            out.append(row)
+        return out
+
+    def get_workforce_agent(self, tenant_id: str, agent_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM workforce_agents WHERE tenant_id=? AND id=?",
+                (tenant_id, agent_id),
+            ).fetchone()
+        if not row:
+            return None
+        out = dict(row)
+        out["skills"] = json.loads(out.get("skills_json") or "[]")
+        out["slack_channels"] = json.loads(out.get("slack_channels_json") or "[]")
+        return out
+
+    def update_workforce_agent_status(self, tenant_id: str, agent_id: int, status: str) -> bool:
+        with self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE workforce_agents SET status=?, updated_at=? WHERE tenant_id=? AND id=?",
+                (status, datetime.utcnow().isoformat(), tenant_id, agent_id),
+            )
+            return cur.rowcount > 0
+
+    def create_workforce_task(
+        self,
+        *,
+        tenant_id: str,
+        created_by: str,
+        title: str,
+        description: str,
+        assignee_agent_id: int | None,
+        collaborator_agent_ids: list[int] | None = None,
+        priority: str = "medium",
+        status: str = "open",
+    ) -> int:
+        now = datetime.utcnow().isoformat()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO workforce_tasks(
+                    tenant_id, created_by, title, description, assignee_agent_id,
+                    collaborator_agent_ids_json, priority, status, result_json,
+                    created_at, updated_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    tenant_id,
+                    created_by,
+                    title,
+                    description,
+                    assignee_agent_id,
+                    json.dumps(collaborator_agent_ids or []),
+                    priority,
+                    status,
+                    None,
+                    now,
+                    now,
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def list_workforce_tasks(self, tenant_id: str, status: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            if status:
+                rows = conn.execute(
+                    "SELECT * FROM workforce_tasks WHERE tenant_id=? AND status=? ORDER BY id DESC LIMIT ?",
+                    (tenant_id, status, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM workforce_tasks WHERE tenant_id=? ORDER BY id DESC LIMIT ?",
+                    (tenant_id, limit),
+                ).fetchall()
+
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            row = dict(r)
+            row["collaborator_agent_ids"] = json.loads(row.get("collaborator_agent_ids_json") or "[]")
+            row["result"] = json.loads(row["result_json"]) if row.get("result_json") else None
+            out.append(row)
+        return out
+
+    def get_workforce_task(self, tenant_id: str, task_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM workforce_tasks WHERE tenant_id=? AND id=?",
+                (tenant_id, task_id),
+            ).fetchone()
+        if not row:
+            return None
+        out = dict(row)
+        out["collaborator_agent_ids"] = json.loads(out.get("collaborator_agent_ids_json") or "[]")
+        out["result"] = json.loads(out["result_json"]) if out.get("result_json") else None
+        return out
+
+    def update_workforce_task(
+        self,
+        *,
+        tenant_id: str,
+        task_id: int,
+        status: str | None = None,
+        assignee_agent_id: int | None = None,
+        result: dict[str, Any] | None = None,
+    ) -> bool:
+        sets: list[str] = []
+        values: list[Any] = []
+        if status is not None:
+            sets.append("status=?")
+            values.append(status)
+        if assignee_agent_id is not None:
+            sets.append("assignee_agent_id=?")
+            values.append(assignee_agent_id)
+        if result is not None:
+            sets.append("result_json=?")
+            values.append(json.dumps(result))
+
+        sets.append("updated_at=?")
+        values.append(datetime.utcnow().isoformat())
+
+        if not sets:
+            return False
+
+        values.extend([tenant_id, task_id])
+        q = f"UPDATE workforce_tasks SET {', '.join(sets)} WHERE tenant_id=? AND id=?"
+        with self._connect() as conn:
+            cur = conn.execute(q, tuple(values))
+            return cur.rowcount > 0

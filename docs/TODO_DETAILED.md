@@ -59,3 +59,21 @@
 - [x] autonomous task decomposition + self-verification subruns
 - [x] policy-aware execution budgets (role/tenant caps)
 - [x] web budget panel (effective budget visibility)
+
+## Workforce / Team-Mode Expansion
+
+- [x] Role + CV based agent profile suggestion endpoint
+- [x] Hire-agent endpoint and DB persistence for agent workforce records
+- [x] Slack manifest generator endpoint for hired agents
+- [x] Workforce task model (assignee + collaborator agents)
+- [x] Run-task endpoint with collaborator notes + synthesis
+- [x] Web UI controls for workforce management
+- [x] API tests for workforce flows
+
+## Next Targets (not yet complete)
+
+- [ ] Slack inbound mention -> route to specific hired agent persona
+- [ ] Agent-to-agent message bus with conversation thread IDs
+- [ ] Workforce Kanban board + assignment drag/drop UI
+- [ ] Real scheduler for recurring workforce tasks
+- [ ] Optional per-agent model/provider settings

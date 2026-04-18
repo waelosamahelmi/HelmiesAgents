@@ -80,7 +80,8 @@ def install_builtin_tools(registry: ToolRegistry, memory: MemoryStore, cancel_to
 
     def memory_search(args: dict) -> dict:
         query = str(args.get("query", ""))
-        hits = memory.search_messages(query, limit=int(args.get("limit", 10)))
+        tenant_id = str(args.get("tenant_id", "default"))
+        hits = memory.search_messages(tenant_id, query, limit=int(args.get("limit", 10)))
         return {"hits": [h.__dict__ for h in hits]}
 
     def ingest_to_markdown(args: dict) -> dict:

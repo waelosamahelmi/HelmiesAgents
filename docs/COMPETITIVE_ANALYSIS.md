@@ -132,3 +132,4 @@ HelmiesAgents will combine:
 - evolving memory + skill graph (GenericAgent + claude-mem)
 - broad operational tooling (Hermes-style)
 - team runtime UX and governance (Multica + HUD principles)
+- control-plane management UX inspired by Onyx-style enterprise operations
