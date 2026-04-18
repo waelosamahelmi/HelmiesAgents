@@ -73,7 +73,12 @@ class ApprovalDecisionRequest(BaseModel):
 
 class BenchmarkRequest(BaseModel):
     suite_name: str = "default"
-    scenarios: list[dict[str, Any]]
+    scenarios: list[dict[str, Any]] = []
+
+
+class BenchmarkGateRequest(BaseModel):
+    suite_name: str
+    min_score: float | None = None
 
 
 class ScimCreateUserRequest(BaseModel):
@@ -362,9 +367,49 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/benchmark/run")
     def benchmark_run(req: BenchmarkRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
         ctx = get_ctx(authorization)
-        scenarios = [BenchmarkScenario(name=s["name"], prompt=s["prompt"], must_contain=s.get("must_contain", [])) for s in req.scenarios]
-        summary = benchmark.run_suite(ctx, req.suite_name, scenarios)
-        return summary.__dict__
+
+        if req.scenarios:
+            scenarios = [BenchmarkScenario(name=s["name"], prompt=s["prompt"], must_contain=s.get("must_contain", [])) for s in req.scenarios]
+            summary = benchmark.run_suite(ctx, req.suite_name, scenarios)
+            return summary.__dict__
+
+        if settings.eval_suites_file:
+            summary = benchmark.run_named_suite(
+                ctx,
+                suite_name=req.suite_name,
+                suites_file=settings.eval_suites_file,
+            )
+            return summary.__dict__
+
+        raise HTTPException(
+            status_code=400,
+            detail="No scenarios provided and HELMIES_EVAL_SUITES_FILE is not configured",
+        )
+
+    @app.get("/benchmark/suites")
+    def benchmark_suites() -> dict[str, Any]:
+        if not settings.eval_suites_file:
+            return {"suites": []}
+        return {"suites": benchmark.list_suites(settings.eval_suites_file)}
+
+    @app.post("/benchmark/gate")
+    def benchmark_gate(req: BenchmarkGateRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        if not settings.eval_suites_file:
+            raise HTTPException(status_code=400, detail="HELMIES_EVAL_SUITES_FILE is not configured")
+
+        threshold = req.min_score if req.min_score is not None else settings.eval_min_score
+        summary = benchmark.run_named_suite(
+            ctx,
+            suite_name=req.suite_name,
+            suites_file=settings.eval_suites_file,
+            min_score_override=threshold,
+        )
+        return {
+            "ok": bool(summary.gate_passed),
+            "threshold": threshold,
+            "summary": summary.__dict__,
+        }
 
     @app.get("/benchmark/results")
     def benchmark_results(suite_name: str | None = None, authorization: str | None = Header(default=None)) -> dict[str, Any]:

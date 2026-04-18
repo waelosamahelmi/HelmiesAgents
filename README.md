@@ -125,7 +125,9 @@ Matching semantics:
 - `POST /approvals/decide`
 
 ### Benchmark
-- `POST /benchmark/run`
+- `POST /benchmark/run` (manual scenarios or named suite from eval file)
+- `GET /benchmark/suites`
+- `POST /benchmark/gate` (quality gate: pass/fail by threshold)
 - `GET /benchmark/results`
 
 ### Enterprise
@@ -143,7 +145,8 @@ helmiesagents chat "what time is it"
 helmiesagents repl
 helmiesagents run-workflow examples/workflows/research_and_report.yaml
 helmiesagents run-workflow-async examples/workflows/research_and_report.yaml
-helmiesagents benchmark-run --suite smoke
+helmiesagents benchmark-run --suite smoke --scenarios-file evals/suites.yaml
+helmiesagents benchmark-gate --suite smoke --scenarios-file evals/suites.yaml --min-score 80
 helmiesagents benchmark-list --suite smoke
 helmiesagents audit-export ./out/audit.json
 helmiesagents init-project ./my_workspace
@@ -163,6 +166,8 @@ helmiesagents init-project ./my_workspace
 - `HELMIES_QUEUE_BACKEND=memory|sqlite` (default: `memory`)
 - `HELMIES_QUEUE_AUTOSTART_WORKER=true|false` (default: `true`)
 - `HELMIES_QUEUE_POLL_INTERVAL_SECONDS=0.5`
+- `HELMIES_EVAL_SUITES_FILE=./evals/suites.yaml`
+- `HELMIES_EVAL_MIN_SCORE=80`
 
 ### Auth / Enterprise
 - `HELMIES_JWT_SECRET=***`
@@ -192,6 +197,7 @@ helmiesagents init-project ./my_workspace
 - `docs/TODO_DETAILED.md`
 - `docs/DEPLOYMENT_BLUEPRINTS.md`
 - `docs/PHASES_COMPLETION_REPORT.md`
+- `evals/suites.yaml`
 
 ## License
 

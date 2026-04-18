@@ -1,0 +1,26 @@
+version: 1
+suites:
+  - name: smoke
+    description: Basic deterministic confidence checks
+    pass_threshold: 80
+    scenarios:
+      - name: time-tool
+        prompt: what time is it
+        must_contain: ["time"]
+      - name: file-list
+        prompt: list files
+        must_contain: ["files"]
+
+  - name: core-tools
+    description: Core built-in tool behavior
+    pass_threshold: 66
+    scenarios:
+      - name: time
+        prompt: what time is it
+        must_contain: ["time"]
+      - name: list-files
+        prompt: list files
+        must_contain: ["files"]
+      - name: ingest-readme
+        prompt: ingest file README.md
+        must_contain: ["ingest"]

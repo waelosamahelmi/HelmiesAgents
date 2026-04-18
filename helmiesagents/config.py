@@ -40,6 +40,10 @@ class Settings:
     queue_autostart_worker: bool = True
     queue_poll_interval_seconds: float = 0.5
 
+    # eval suites
+    eval_suites_file: str | None = None
+    eval_min_score: float = 80.0
+
     # gateway credentials
     slack_bot_token: str | None = None
     telegram_bot_token: str | None = None
@@ -81,6 +85,8 @@ class Settings:
             queue_backend=os.getenv("HELMIES_QUEUE_BACKEND", "memory"),
             queue_autostart_worker=_env_bool("HELMIES_QUEUE_AUTOSTART_WORKER", True),
             queue_poll_interval_seconds=float(os.getenv("HELMIES_QUEUE_POLL_INTERVAL_SECONDS", "0.5")),
+            eval_suites_file=os.getenv("HELMIES_EVAL_SUITES_FILE"),
+            eval_min_score=float(os.getenv("HELMIES_EVAL_MIN_SCORE", "80")),
             slack_bot_token=os.getenv("SLACK_BOT_TOKEN"),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
             discord_bot_token=os.getenv("DISCORD_BOT_TOKEN"),

@@ -162,15 +162,48 @@ def benchmark_run(
     tenant: str = typer.Option("default", "--tenant"),
     user: str = typer.Option("cli-user", "--user"),
     roles: str = typer.Option("admin", "--roles"),
+    scenarios_file: str = typer.Option("", "--scenarios-file", help="YAML suites file; if set runs named suite"),
 ):
-    _, _, _, _, _, bench = _build_runtime()
+    settings, _, _, _, _, bench = _build_runtime()
     ctx = _ctx(tenant, user, roles, False)
-    scenarios = [
-        BenchmarkScenario(name="time-tool", prompt="what time is it", must_contain=["time"]),
-        BenchmarkScenario(name="file-list", prompt="list files", must_contain=["files"]),
-    ]
-    summary = bench.run_suite(ctx, suite_name, scenarios)
+
+    if scenarios_file:
+        summary = bench.run_named_suite(ctx, suite_name=suite_name, suites_file=scenarios_file)
+    elif settings.eval_suites_file:
+        summary = bench.run_named_suite(ctx, suite_name=suite_name, suites_file=settings.eval_suites_file)
+    else:
+        scenarios = [
+            BenchmarkScenario(name="time-tool", prompt="what time is it", must_contain=["time"]),
+            BenchmarkScenario(name="file-list", prompt="list files", must_contain=["files"]),
+        ]
+        summary = bench.run_suite(ctx, suite_name, scenarios)
+
     console.print_json(json.dumps(summary.__dict__))
+
+
+@app.command("benchmark-gate")
+def benchmark_gate(
+    suite_name: str = typer.Option("default", "--suite"),
+    tenant: str = typer.Option("default", "--tenant"),
+    user: str = typer.Option("cli-user", "--user"),
+    roles: str = typer.Option("admin", "--roles"),
+    min_score: float = typer.Option(-1.0, "--min-score"),
+    scenarios_file: str = typer.Option("", "--scenarios-file"),
+):
+    settings, _, _, _, _, bench = _build_runtime()
+    ctx = _ctx(tenant, user, roles, False)
+
+    suites_file = scenarios_file or settings.eval_suites_file
+    if not suites_file:
+        console.print("No eval suites file configured. Set --scenarios-file or HELMIES_EVAL_SUITES_FILE")
+        raise typer.Exit(code=2)
+
+    threshold = min_score if min_score >= 0 else settings.eval_min_score
+    summary = bench.run_named_suite(ctx, suite_name=suite_name, suites_file=suites_file, min_score_override=threshold)
+    payload = {"ok": bool(summary.gate_passed), "threshold": threshold, "summary": summary.__dict__}
+    console.print_json(json.dumps(payload))
+    if not payload["ok"]:
+        raise typer.Exit(code=1)
 
 
 @app.command("benchmark-list")

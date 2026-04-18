@@ -54,4 +54,4 @@
 - [x] distributed task queue (Celery/Arq/RQ)
 - [x] SSO/SAML/OIDC enterprise login
 - [x] policy-as-code DSL
-- [ ] advanced eval suites and CI quality gates
+- [x] advanced eval suites and CI quality gates
