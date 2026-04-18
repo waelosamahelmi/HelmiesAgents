@@ -36,6 +36,7 @@
       <button onclick="sendChat()">Chat</button>
       <button onclick="sendChatStream()">Stream Chat</button>
       <button onclick="runWorkflow()">Run Workflow</button>
+      <button onclick="loadBudget()">Effective Budget</button>
       <button onclick="runBenchmark()">Benchmark</button>
       <button onclick="listRuns()">Workflow Runs</button>
       <button onclick="listAudit()">Audit Logs</button>
@@ -45,6 +46,11 @@
       <input id="workflowPath" placeholder="workflow path" value="examples/workflows/research_and_report.yaml" />
     </div>
     <textarea id="msg" rows="5" placeholder="Ask HelmiesAgents anything...">what time is it</textarea>
+  </div>
+
+  <div class="card">
+    <h3>Effective Budget</h3>
+    <pre id="budget">No budget loaded.</pre>
   </div>
 
   <div class="card">
@@ -136,6 +142,12 @@
       try{
         out.textContent = JSON.stringify(await api('/workflow/run','POST',{workflow_path:workflowPath.value,session_id:session.value}),null,2);
       }catch(e){ out.textContent = JSON.stringify(e,null,2); }
+    }
+
+    async function loadBudget(){
+      try{
+        budget.textContent = JSON.stringify(await api('/execution/budget/effective'), null, 2);
+      }catch(e){ budget.textContent = JSON.stringify(e,null,2); }
     }
 
     async function runBenchmark(){

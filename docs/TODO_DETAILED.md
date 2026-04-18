@@ -58,3 +58,4 @@
 - [x] autonomous critic-repair quality loop
 - [x] autonomous task decomposition + self-verification subruns
 - [x] policy-aware execution budgets (role/tenant caps)
+- [x] web budget panel (effective budget visibility)
