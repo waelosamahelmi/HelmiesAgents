@@ -1,0 +1,37 @@
+name: quality-gates
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-and-eval:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Compile check
+        run: |
+          python -m compileall -q helmiesagents tests
+
+      - name: Run tests
+        run: |
+          pytest -q
+
+      - name: Eval quality gate
+        run: |
+          helmiesagents benchmark-gate --suite smoke --scenarios-file evals/suites.yaml --min-score 80
