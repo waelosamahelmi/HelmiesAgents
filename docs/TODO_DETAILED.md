@@ -57,3 +57,4 @@
 - [x] advanced eval suites and CI quality gates
 - [x] autonomous critic-repair quality loop
 - [x] autonomous task decomposition + self-verification subruns
+- [x] policy-aware execution budgets (role/tenant caps)

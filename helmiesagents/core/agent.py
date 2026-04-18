@@ -10,6 +10,7 @@ from helmiesagents.config import Settings
 from helmiesagents.context.compression import ContextCompressor
 from helmiesagents.core.critic import ResponseCritic
 from helmiesagents.core.planner import make_plan
+from helmiesagents.execution.budget import ExecutionBudgetPolicy
 from helmiesagents.memory.store import MemoryStore
 from helmiesagents.models import RequestContext
 from helmiesagents.providers.factory import build_provider
@@ -44,6 +45,7 @@ class HelmiesAgent:
         self.policy = PolicyEngine(policy_file=settings.policy_dsl_file)
         self.compressor = ContextCompressor()
         self.critic = ResponseCritic()
+        self.budget_policy = ExecutionBudgetPolicy(settings.execution_budget_file)
         self.router = ModelRouter(default_model=settings.openai_model, policy_file=settings.routing_policy_file)
 
     def _system_prompt(self) -> str:
@@ -73,6 +75,14 @@ class HelmiesAgent:
         )
         return plan, prompt, route
 
+    def _resolve_budget(self, ctx: RequestContext) -> dict[str, Any]:
+        b = self.budget_policy.resolve(tenant_id=ctx.tenant_id, roles=ctx.roles)
+        return {
+            "max_tool_calls": b.max_tool_calls,
+            "max_subruns": b.max_subruns,
+            "max_critic_retries": b.max_critic_retries,
+        }
+
     def _apply_tools_and_finalize(
         self,
         *,
@@ -82,13 +92,28 @@ class HelmiesAgent:
         plan: list[str],
         route_policy: str,
         quality: dict[str, Any] | None = None,
+        budget: dict[str, Any] | None = None,
     ) -> AgentResponse:
         tools_executed: list[dict[str, Any]] = []
+        tool_calls = 0
 
         def _run_tools(text: str) -> str:
+            nonlocal tool_calls
             output_text = text
             for match in TOOL_PATTERN.finditer(text):
                 name = match.group("name")
+
+                if budget is not None and budget.get("max_tool_calls") is not None and tool_calls >= int(budget["max_tool_calls"]):
+                    output_text += f"\n\n[tool:{name} budget_blocked] max_tool_calls reached"
+                    tools_executed.append(
+                        {
+                            "tool": name,
+                            "args": {},
+                            "budget_blocked": True,
+                            "reason": "max_tool_calls reached",
+                        }
+                    )
+                    continue
                 args_text = match.group("args")
                 try:
                     args = json.loads(args_text)
@@ -122,6 +147,7 @@ class HelmiesAgent:
 
                 try:
                     result = self.tools.execute(name, args)
+                    tool_calls += 1
                     tools_executed.append({"tool": name, "args": args, "result": result})
                     output_text += f"\n\n[tool:{name} result] {json.dumps(result)[:1500]}"
                 except Exception as e:
@@ -142,6 +168,7 @@ class HelmiesAgent:
                     "route_policy": route_policy,
                     "tools_count": len(tools_executed),
                     "quality": quality,
+                    "budget": budget,
                 }
             ),
         )
@@ -159,7 +186,15 @@ class HelmiesAgent:
             "Return only the improved final answer. Keep it concise and actionable."
         )
 
-    def _generate_with_critic(self, *, system_prompt: str, prompt: str, user_message: str, model_override: str | None) -> tuple[str, dict[str, Any]]:
+    def _generate_with_critic(
+        self,
+        *,
+        system_prompt: str,
+        prompt: str,
+        user_message: str,
+        model_override: str | None,
+        budget: dict[str, Any] | None = None,
+    ) -> tuple[str, dict[str, Any]]:
         required = self.critic.required_keywords_from_prompt(user_message)
         attempts: list[dict[str, Any]] = []
 
@@ -168,6 +203,8 @@ class HelmiesAgent:
         attempts.append({"attempt": 1, "score": c.score, "pass": c.pass_gate, "feedback": c.feedback})
 
         max_retries = max(0, int(self.settings.critic_max_retries))
+        if budget is not None and budget.get("max_critic_retries") is not None:
+            max_retries = min(max_retries, int(budget["max_critic_retries"]))
         target = float(self.settings.critic_min_score)
 
         if self.settings.critic_enabled:
@@ -238,6 +275,7 @@ class HelmiesAgent:
         plan: list[str],
         system_prompt: str,
         model_override: str | None,
+        budget: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         enabled = bool(self.settings.autonomous_subruns_enabled)
         result: dict[str, Any] = {
@@ -250,6 +288,9 @@ class HelmiesAgent:
             return result
 
         subtasks = self._detect_subtasks(user_message, plan)
+        if budget is not None and budget.get("max_subruns") is not None:
+            subtasks = subtasks[: max(0, int(budget["max_subruns"]))]
+
         if not subtasks:
             return result
 
@@ -283,6 +324,7 @@ class HelmiesAgent:
     def chat(self, session_id: str, user_message: str, ctx: RequestContext | None = None) -> AgentResponse:
         ctx = ctx or RequestContext()
         plan, prompt, route = self._build_chat_prompt(session_id=session_id, user_message=user_message, ctx=ctx)
+        budget = self._resolve_budget(ctx)
 
         autonomy = self._run_autonomous_subruns(
             session_id=session_id,
@@ -290,6 +332,7 @@ class HelmiesAgent:
             plan=plan,
             system_prompt=self._system_prompt(),
             model_override=route.model,
+            budget=budget,
         )
 
         if autonomy["subruns"]:
@@ -303,8 +346,10 @@ class HelmiesAgent:
             prompt=prompt,
             user_message=user_message,
             model_override=route.model,
+            budget=budget,
         )
         quality["autonomy"] = autonomy
+        quality["budget"] = budget
         return self._apply_tools_and_finalize(
             session_id=session_id,
             ctx=ctx,
@@ -312,13 +357,15 @@ class HelmiesAgent:
             plan=plan,
             route_policy=route.policy_name,
             quality=quality,
+            budget=budget,
         )
 
     def stream_chat(self, session_id: str, user_message: str, ctx: RequestContext | None = None) -> Iterable[StreamEvent]:
         ctx = ctx or RequestContext()
         plan, prompt, route = self._build_chat_prompt(session_id=session_id, user_message=user_message, ctx=ctx)
+        budget = self._resolve_budget(ctx)
 
-        yield StreamEvent(type="meta", data={"plan": plan, "route_policy": route.policy_name, "model": route.model})
+        yield StreamEvent(type="meta", data={"plan": plan, "route_policy": route.policy_name, "model": route.model, "budget": budget})
 
         chunks: list[str] = []
         for chunk in self.provider.stream_generate(self._system_prompt(), prompt, model_override=route.model):
@@ -334,6 +381,7 @@ class HelmiesAgent:
             plan=plan,
             system_prompt=self._system_prompt(),
             model_override=route.model,
+            budget=budget,
         )
         quality = {
             "enabled": False,
@@ -344,6 +392,7 @@ class HelmiesAgent:
             "target": float(self.settings.critic_min_score),
             "mode": "stream_no_repair",
             "autonomy": autonomy,
+            "budget": budget,
         }
         yield StreamEvent(type="model_output", data={"text": full_text})
 
@@ -354,6 +403,7 @@ class HelmiesAgent:
             plan=plan,
             route_policy=route.policy_name,
             quality=quality,
+            budget=budget,
         )
         yield StreamEvent(
             type="final",

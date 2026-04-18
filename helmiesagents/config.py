@@ -54,6 +54,9 @@ class Settings:
     autonomous_subruns_max: int = 2
     autonomous_subruns_verify: bool = True
 
+    # policy-aware execution budgets
+    execution_budget_file: str | None = None
+
     # gateway credentials
     slack_bot_token: str | None = None
     telegram_bot_token: str | None = None
@@ -103,6 +106,7 @@ class Settings:
             autonomous_subruns_enabled=_env_bool("HELMIES_AUTONOMOUS_SUBRUNS_ENABLED", True),
             autonomous_subruns_max=int(os.getenv("HELMIES_AUTONOMOUS_SUBRUNS_MAX", "2")),
             autonomous_subruns_verify=_env_bool("HELMIES_AUTONOMOUS_SUBRUNS_VERIFY", True),
+            execution_budget_file=os.getenv("HELMIES_EXECUTION_BUDGET_FILE"),
             slack_bot_token=os.getenv("SLACK_BOT_TOKEN"),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
             discord_bot_token=os.getenv("DISCORD_BOT_TOKEN"),

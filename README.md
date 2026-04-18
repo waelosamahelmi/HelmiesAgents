@@ -174,6 +174,7 @@ helmiesagents init-project ./my_workspace
 - `HELMIES_AUTONOMOUS_SUBRUNS_ENABLED=true|false` (default: `true`)
 - `HELMIES_AUTONOMOUS_SUBRUNS_MAX=2`
 - `HELMIES_AUTONOMOUS_SUBRUNS_VERIFY=true|false`
+- `HELMIES_EXECUTION_BUDGET_FILE=./policy.execution.yaml`
 
 ### Auth / Enterprise
 - `HELMIES_JWT_SECRET=***`
