@@ -72,8 +72,10 @@
 
 ## Next Targets (not yet complete)
 
-- [ ] Slack inbound mention -> route to specific hired agent persona
-- [ ] Agent-to-agent message bus with conversation thread IDs
+- [x] Slack inbound mention -> route to specific hired agent persona
+- [x] Agent-to-agent message bus with conversation thread IDs
 - [ ] Workforce Kanban board + assignment drag/drop UI
 - [ ] Real scheduler for recurring workforce tasks
 - [ ] Optional per-agent model/provider settings
+- [ ] Full Next.js admin WebUI with analytics, kanban, and org-level control center
+- [ ] Slack manifest installer wizard + OAuth callback automation

@@ -37,6 +37,9 @@ def test_workforce_suggest_hire_and_manifest(tmp_path):
     assert s['suggested_name']
     assert s['system_prompt']
     assert isinstance(s['recommended_skills'], list) and len(s['recommended_skills']) > 0
+    assert 0.0 < s['confidence_score'] <= 1.0
+    assert isinstance(s['strengths'], list)
+    assert isinstance(s['risk_flags'], list)
 
     hire = client.post(
         '/workforce/hire',
@@ -68,12 +71,15 @@ def test_workforce_suggest_hire_and_manifest(tmp_path):
             'bot_display_name': 'Mia Agent',
             'request_url': 'https://example.com/gateway/inbound',
             'redirect_urls': ['https://example.com/slack/oauth/callback'],
+            'command_name': '/mia',
         },
     )
     assert manifest.status_code == 200
     m = manifest.json()['manifest']
     assert m['display_information']['name'] == 'HelmiesAI-Marketing'
     assert 'chat:write' in m['oauth_config']['scopes']['bot']
+    assert 'commands' in m['oauth_config']['scopes']['bot']
+    assert m['features']['slash_commands'][0]['command'] == '/mia'
 
 
 def test_workforce_task_lifecycle(tmp_path):
@@ -142,6 +148,16 @@ def test_workforce_task_lifecycle(tmp_path):
     assert 'response' in result
     assert 'collaborator_notes' in result
     assert isinstance(result['collaborator_notes'], list)
+    assert result.get('thread_id') == f'wf-task-{task_id}'
+    assert isinstance(result.get('bus_messages'), list)
+    assert len(result['bus_messages']) >= 1
+
+    bus_read = client.post('/workforce/bus/mark-read', headers=headers, json={'thread_id': f'wf-task-{task_id}'})
+    assert bus_read.status_code == 200
+
+    bus_list = client.get('/workforce/bus/messages', headers=headers, params={'thread_id': f'wf-task-{task_id}'})
+    assert bus_list.status_code == 200
+    assert isinstance(bus_list.json()['messages'], list)
 
     tasks = client.get('/workforce/tasks', headers=headers)
     assert tasks.status_code == 200

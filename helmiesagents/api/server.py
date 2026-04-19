@@ -65,6 +65,8 @@ class GatewaySendRequest(BaseModel):
     platform: str
     channel_id: str
     text: str
+    agent_id: int | None = None
+    thread_id: str | None = None
 
 
 class ApprovalDecisionRequest(BaseModel):
@@ -122,11 +124,25 @@ class WorkforceTaskRunRequest(BaseModel):
     task_id: int
 
 
+class WorkforceBusMessageRequest(BaseModel):
+    thread_id: str
+    from_agent_id: int | None = None
+    to_agent_id: int | None = None
+    message: str
+    metadata: dict[str, Any] = {}
+
+
+class WorkforceBusMarkReadRequest(BaseModel):
+    thread_id: str
+    to_agent_id: int | None = None
+
+
 class SlackManifestRequest(BaseModel):
     app_name: str
     bot_display_name: str
     request_url: str
     redirect_urls: list[str] = []
+    command_name: str = "/helmies"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -138,7 +154,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     install_builtin_tools(registry, memory)
     agent = HelmiesAgent(settings=settings, memory=memory, tools=registry)
     workflow_engine = WorkflowEngine(agent=agent, memory=memory, settings=settings)
-    gateway_router = GatewayRouter(agent=agent)
+    gateway_router = GatewayRouter(agent=agent, memory=memory)
     policy = PolicyEngine(policy_file=settings.policy_dsl_file)
     approval_manager = ApprovalManager(memory=memory, policy=policy)
     benchmark = BenchmarkHarness(agent=agent, memory=memory)
@@ -393,6 +409,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 channel_id=event.channel_id,
                 user_id=ctx.user_id,
                 text=event.text,
+                agent_id=event.agent_id,
+                thread_id=event.thread_id,
             ),
             ctx=ctx,
         )
@@ -546,6 +564,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "summary": suggestion.summary,
             "system_prompt": suggestion.system_prompt,
             "recommended_skills": suggestion.recommended_skills,
+            "confidence_score": suggestion.confidence_score,
+            "strengths": suggestion.strengths,
+            "risk_flags": suggestion.risk_flags,
         }
 
     @app.post("/workforce/hire")
@@ -587,6 +608,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             bot_display_name=req.bot_display_name,
             request_url=req.request_url,
             redirect_urls=req.redirect_urls,
+            command_name=req.command_name,
         )
         return {"manifest": manifest}
 
@@ -621,6 +643,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             actor_user_id=ctx.user_id,
         )
         return {"ok": True, "result": result}
+
+    @app.post("/workforce/bus/message")
+    def workforce_bus_message(req: WorkforceBusMessageRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        message_id = memory.add_workforce_bus_message(
+            tenant_id=ctx.tenant_id,
+            thread_id=req.thread_id,
+            from_agent_id=req.from_agent_id,
+            to_agent_id=req.to_agent_id,
+            message=req.message,
+            metadata=req.metadata,
+        )
+        return {"ok": True, "message_id": message_id}
+
+    @app.get("/workforce/bus/messages")
+    def workforce_bus_messages(
+        thread_id: str | None = None,
+        to_agent_id: int | None = None,
+        limit: int = 200,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        rows = memory.list_workforce_bus_messages(
+            tenant_id=ctx.tenant_id,
+            thread_id=thread_id,
+            to_agent_id=to_agent_id,
+            limit=limit,
+        )
+        return {"messages": rows}
+
+    @app.post("/workforce/bus/mark-read")
+    def workforce_bus_mark_read(req: WorkforceBusMarkReadRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        updated = memory.mark_workforce_bus_read(
+            tenant_id=ctx.tenant_id,
+            thread_id=req.thread_id,
+            to_agent_id=req.to_agent_id,
+        )
+        return {"ok": True, "updated": updated}
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:

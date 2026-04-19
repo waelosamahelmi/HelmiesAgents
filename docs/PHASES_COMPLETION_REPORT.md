@@ -36,11 +36,13 @@ All requested phases have been implemented in this repository as a production-fo
 - deployment blueprint documentation
 
 ### Workforce Extension (post-phase enhancement)
-- role+cv suggestion endpoint
+- role+cv suggestion endpoint (now with confidence score + strengths + risk flags)
 - hire/list workforce agents endpoints
-- slack manifest generator endpoint
+- slack manifest generator endpoint (enhanced with slash command + interactivity + app home)
 - workforce tasks create/list/run endpoints
 - collaborator-assisted execution synthesis
+- agent-team message bus with thread IDs and read tracking
+- slack inbound routing to hired agent persona (`agent_id` + `thread_id` aware)
 - WebUI workforce management controls
 
 ## Validation

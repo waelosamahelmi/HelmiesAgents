@@ -16,6 +16,9 @@ _DEFAULT_ROLE_SKILLS: dict[str, list[str]] = {
     "designer": ["ux", "ui", "prototyping"],
     "operations": ["incident response", "runbooks", "automation"],
     "support": ["customer communication", "triage", "knowledge base"],
+    "hr": ["hiring operations", "candidate screening", "policy communication"],
+    "finance": ["budget analysis", "forecasting", "variance reporting"],
+    "product": ["roadmapping", "product discovery", "stakeholder alignment"],
 }
 
 _DEFAULT_ROLE_PROMPTS: dict[str, str] = {
@@ -25,6 +28,9 @@ _DEFAULT_ROLE_PROMPTS: dict[str, str] = {
     "designer": "You are a product designer who balances usability, accessibility, and brand consistency.",
     "operations": "You are an operations lead focused on reliability, process clarity, and root-cause elimination.",
     "support": "You are a support specialist who resolves issues quickly and improves documentation quality.",
+    "hr": "You are an HR lead focused on talent quality, process fairness, and fast hiring execution.",
+    "finance": "You are a finance controller focused on forecasting accuracy, cash discipline, and clear reporting.",
+    "product": "You are a product manager who turns strategy into execution with crisp prioritization and measurable outcomes.",
 }
 
 
@@ -35,6 +41,9 @@ class WorkforceProfileSuggestion:
     summary: str
     system_prompt: str
     recommended_skills: list[str]
+    confidence_score: float
+    strengths: list[str]
+    risk_flags: list[str]
 
 
 class WorkforceService:
@@ -56,6 +65,12 @@ class WorkforceService:
             return "operations"
         if any(k in jt for k in ["support", "customer success", "customer service"]):
             return "support"
+        if any(k in jt for k in ["hr", "human resources", "recruit", "talent"]):
+            return "hr"
+        if any(k in jt for k in ["finance", "accounting", "controller", "cfo"]):
+            return "finance"
+        if any(k in jt for k in ["product manager", "product lead", "pm"]):
+            return "product"
         return "operations"
 
     def suggest_profile(self, *, name: str | None, job_title: str, cv_text: str = "") -> WorkforceProfileSuggestion:
@@ -64,16 +79,48 @@ class WorkforceService:
         skills = _DEFAULT_ROLE_SKILLS[role]
 
         cv_trimmed = (cv_text or "").strip()
+        cv_lower = cv_trimmed.lower()
         cv_context = cv_trimmed[:1200] if cv_trimmed else "No CV provided."
         suggested_name = (name or f"{job_title.strip()} Agent").strip()
+
+        role_keywords: dict[str, list[str]] = {
+            "marketing": ["campaign", "seo", "growth", "brand", "funnel", "analytics"],
+            "sales": ["quota", "pipeline", "prospecting", "crm", "closing", "negotiation"],
+            "developer": ["python", "typescript", "api", "testing", "architecture", "ci/cd"],
+            "designer": ["figma", "ux", "prototype", "design system", "accessibility"],
+            "operations": ["incident", "on-call", "automation", "runbook", "sre"],
+            "support": ["ticket", "sla", "customer", "kb", "troubleshoot"],
+            "hr": ["hiring", "talent", "interview", "onboarding", "policy"],
+            "finance": ["budget", "forecast", "variance", "cashflow", "p&l"],
+            "product": ["roadmap", "discovery", "prioritization", "kpi", "stakeholder"],
+        }
+        matched = [k for k in role_keywords.get(role, []) if k in cv_lower]
+
+        strengths = [f"CV mentions relevant keyword: {k}" for k in matched[:6]]
+        risk_flags: list[str] = []
+        if not cv_trimmed:
+            risk_flags.append("No CV text provided; recommendation confidence reduced")
+        if cv_trimmed and len(cv_trimmed) < 120:
+            risk_flags.append("Very short CV text; limited evidence for seniority")
+        if cv_trimmed and len(matched) <= 1:
+            risk_flags.append("Few role-specific signals detected in CV")
+
+        confidence = 0.45
+        confidence += min(0.35, 0.05 * len(matched))
+        if cv_trimmed and len(cv_trimmed) > 300:
+            confidence += 0.1
+        if risk_flags:
+            confidence -= min(0.2, 0.05 * len(risk_flags))
+        confidence = max(0.1, min(0.98, confidence))
 
         system_prompt = (
             f"{base_prompt}\n"
             "Operate as a reliable teammate in a multi-agent company setup.\n"
             "Coordinate with peer agents, keep outputs concise, and escalate risks early.\n"
+            "You must collaborate asynchronously through the workforce bus and publish concise handoff notes.\n"
             f"Candidate context:\n{cv_context}"
         )
-        summary = f"Suggested profile for {job_title} based on role heuristics and CV context."
+        summary = f"Suggested profile for {job_title} based on role heuristics, CV signals, and team-collaboration requirements."
 
         return WorkforceProfileSuggestion(
             suggested_name=suggested_name,
@@ -81,6 +128,9 @@ class WorkforceService:
             summary=summary,
             system_prompt=system_prompt,
             recommended_skills=skills,
+            confidence_score=round(confidence, 3),
+            strengths=strengths,
+            risk_flags=risk_flags,
         )
 
     def hire_agent(
@@ -108,8 +158,19 @@ class WorkforceService:
         )
 
     @staticmethod
-    def build_slack_manifest(*, app_name: str, bot_display_name: str, request_url: str, redirect_urls: list[str] | None = None) -> dict[str, Any]:
+    def build_slack_manifest(
+        *,
+        app_name: str,
+        bot_display_name: str,
+        request_url: str,
+        redirect_urls: list[str] | None = None,
+        command_name: str = "/helmies",
+    ) -> dict[str, Any]:
         redirects = redirect_urls or []
+        command = (command_name or "/helmies").strip() or "/helmies"
+        if not command.startswith("/"):
+            command = f"/{command}"
+
         return {
             "display_information": {
                 "name": app_name,
@@ -117,10 +178,24 @@ class WorkforceService:
                 "background_color": "#111827",
             },
             "features": {
+                "app_home": {
+                    "home_tab_enabled": True,
+                    "messages_tab_enabled": True,
+                    "messages_tab_read_only_enabled": False,
+                },
                 "bot_user": {
                     "display_name": bot_display_name,
                     "always_online": True,
-                }
+                },
+                "slash_commands": [
+                    {
+                        "command": command,
+                        "url": request_url,
+                        "description": "Route tasks to HelmiesAI workforce agents",
+                        "usage_hint": "ask <agent> <task>",
+                        "should_escape": False,
+                    }
+                ],
             },
             "oauth_config": {
                 "redirect_urls": redirects,
@@ -130,6 +205,8 @@ class WorkforceService:
                         "channels:history",
                         "channels:read",
                         "chat:write",
+                        "chat:write.public",
+                        "commands",
                         "groups:history",
                         "im:history",
                         "im:read",
@@ -143,6 +220,10 @@ class WorkforceService:
                 "event_subscriptions": {
                     "request_url": request_url,
                     "bot_events": ["app_mention", "message.channels", "message.im"],
+                },
+                "interactivity": {
+                    "is_enabled": True,
+                    "request_url": request_url,
                 },
                 "org_deploy_enabled": False,
                 "socket_mode_enabled": False,
@@ -190,6 +271,16 @@ class WorkforceService:
         if not task:
             raise ValueError("task not found")
 
+        thread_id = f"wf-task-{task_id}"
+        self.memory.add_workforce_bus_message(
+            tenant_id=tenant_id,
+            thread_id=thread_id,
+            from_agent_id=None,
+            to_agent_id=task.get("assignee_agent_id"),
+            message=f"Task opened: {task.get('title')} — {task.get('description')}",
+            metadata={"kind": "task_open", "task_id": task_id},
+        )
+
         assignee_id = task.get("assignee_agent_id")
         assigned_agent = self.memory.get_workforce_agent(tenant_id, int(assignee_id)) if assignee_id else None
         collaborators: list[dict[str, Any]] = []
@@ -229,14 +320,21 @@ class WorkforceService:
                 user_message=c_prompt,
                 ctx=RequestContext(tenant_id=tenant_id, user_id=actor_user_id, roles=["admin"]),
             )
-            collaborator_notes.append(
-                {
-                    "agent_id": c.get("id"),
-                    "name": c.get("name"),
-                    "job_title": c.get("job_title"),
-                    "note": c_res.text,
-                    "tools_executed": c_res.tools_executed,
-                }
+            note_payload = {
+                "agent_id": c.get("id"),
+                "name": c.get("name"),
+                "job_title": c.get("job_title"),
+                "note": c_res.text,
+                "tools_executed": c_res.tools_executed,
+            }
+            collaborator_notes.append(note_payload)
+            self.memory.add_workforce_bus_message(
+                tenant_id=tenant_id,
+                thread_id=thread_id,
+                from_agent_id=int(c.get("id")),
+                to_agent_id=assignee_id,
+                message=c_res.text,
+                metadata={"kind": "collaborator_note", "task_id": task_id, "agent_name": c.get("name")},
             )
 
         notes_block = "\n".join([f"- {n['name']} ({n['job_title']}): {n['note']}" for n in collaborator_notes]) or "- none"
@@ -259,6 +357,16 @@ class WorkforceService:
             ctx=RequestContext(tenant_id=tenant_id, user_id=actor_user_id, roles=["admin"]),
         )
 
+        self.memory.add_workforce_bus_message(
+            tenant_id=tenant_id,
+            thread_id=thread_id,
+            from_agent_id=assignee_id,
+            to_agent_id=None,
+            message=res.text,
+            metadata={"kind": "assignee_final", "task_id": task_id},
+        )
+
+        bus_messages = self.memory.list_workforce_bus_messages(tenant_id=tenant_id, thread_id=thread_id, limit=500)
         result = {
             "response": res.text,
             "tools_executed": res.tools_executed,
@@ -266,12 +374,15 @@ class WorkforceService:
             "assignee_agent_id": assignee_id,
             "collaborator_agent_ids": task.get("collaborator_agent_ids") or [],
             "collaborator_notes": collaborator_notes,
+            "thread_id": thread_id,
+            "bus_messages": bus_messages,
         }
         self.memory.update_workforce_task(tenant_id=tenant_id, task_id=task_id, status="completed", result=result)
+        self.memory.mark_workforce_bus_read(tenant_id=tenant_id, thread_id=thread_id, to_agent_id=assignee_id)
         self.memory.log_audit(
             tenant_id=tenant_id,
             user_id=actor_user_id,
             event_type="workforce_task_run",
-            payload_json=json.dumps({"task_id": task_id, "assignee_agent_id": assignee_id}),
+            payload_json=json.dumps({"task_id": task_id, "assignee_agent_id": assignee_id, "thread_id": thread_id}),
         )
         return result

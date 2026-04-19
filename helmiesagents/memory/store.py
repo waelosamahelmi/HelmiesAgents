@@ -196,6 +196,28 @@ class MemoryStore:
                 """
             )
 
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS workforce_bus_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id TEXT NOT NULL,
+                    thread_id TEXT NOT NULL,
+                    from_agent_id INTEGER,
+                    to_agent_id INTEGER,
+                    message TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    read_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_workforce_bus_thread ON workforce_bus_messages(tenant_id, thread_id, id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_workforce_bus_inbox ON workforce_bus_messages(tenant_id, to_agent_id, id)"
+            )
+
     def add_message(self, tenant_id: str, user_id: str, session_id: str, role: str, content: str) -> None:
         with self._connect() as conn:
             conn.execute(
@@ -542,3 +564,106 @@ class MemoryStore:
         with self._connect() as conn:
             cur = conn.execute(q, tuple(values))
             return cur.rowcount > 0
+
+    # Workforce inter-agent message bus
+    def add_workforce_bus_message(
+        self,
+        *,
+        tenant_id: str,
+        thread_id: str,
+        from_agent_id: int | None,
+        to_agent_id: int | None,
+        message: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> int:
+        now = datetime.utcnow().isoformat()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO workforce_bus_messages(
+                    tenant_id, thread_id, from_agent_id, to_agent_id, message, metadata_json, created_at
+                ) VALUES(?,?,?,?,?,?,?)
+                """,
+                (
+                    tenant_id,
+                    thread_id,
+                    from_agent_id,
+                    to_agent_id,
+                    message,
+                    json.dumps(metadata or {}),
+                    now,
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def list_workforce_bus_messages(
+        self,
+        *,
+        tenant_id: str,
+        thread_id: str | None = None,
+        to_agent_id: int | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            if thread_id and to_agent_id is not None:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM workforce_bus_messages
+                    WHERE tenant_id=? AND thread_id=? AND (to_agent_id IS NULL OR to_agent_id=?)
+                    ORDER BY id DESC LIMIT ?
+                    """,
+                    (tenant_id, thread_id, to_agent_id, limit),
+                ).fetchall()
+            elif thread_id:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM workforce_bus_messages
+                    WHERE tenant_id=? AND thread_id=?
+                    ORDER BY id DESC LIMIT ?
+                    """,
+                    (tenant_id, thread_id, limit),
+                ).fetchall()
+            elif to_agent_id is not None:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM workforce_bus_messages
+                    WHERE tenant_id=? AND (to_agent_id IS NULL OR to_agent_id=?)
+                    ORDER BY id DESC LIMIT ?
+                    """,
+                    (tenant_id, to_agent_id, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM workforce_bus_messages WHERE tenant_id=? ORDER BY id DESC LIMIT ?",
+                    (tenant_id, limit),
+                ).fetchall()
+
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            row = dict(r)
+            row["metadata"] = json.loads(row.get("metadata_json") or "{}")
+            out.append(row)
+        return out
+
+    def mark_workforce_bus_read(self, *, tenant_id: str, thread_id: str, to_agent_id: int | None = None) -> int:
+        now = datetime.utcnow().isoformat()
+        with self._connect() as conn:
+            if to_agent_id is None:
+                cur = conn.execute(
+                    """
+                    UPDATE workforce_bus_messages
+                    SET read_at=?
+                    WHERE tenant_id=? AND thread_id=? AND read_at IS NULL
+                    """,
+                    (now, tenant_id, thread_id),
+                )
+            else:
+                cur = conn.execute(
+                    """
+                    UPDATE workforce_bus_messages
+                    SET read_at=?
+                    WHERE tenant_id=? AND thread_id=? AND (to_agent_id IS NULL OR to_agent_id=?) AND read_at IS NULL
+                    """,
+                    (now, tenant_id, thread_id, to_agent_id),
+                )
+            return int(cur.rowcount)

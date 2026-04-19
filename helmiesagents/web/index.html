@@ -97,6 +97,7 @@
       <button onclick="runBenchmark()">Benchmark</button>
       <button onclick="listRuns()">Workflow Runs</button>
       <button onclick="listAudit()">Audit Logs</button>
+      <button class="secondary" onclick="gatewayInboundAsAgent()">Gateway Inbound As Hired Agent</button>
     </div>
     <div class="row" style="margin-top:10px;">
       <input id="session" placeholder="session id" value="web-default" />
@@ -166,6 +167,7 @@
         <input id="wfSlackAppName" placeholder="Slack app name" value="HelmiesAI-Agent" />
         <input id="wfSlackBotName" placeholder="Bot display name" value="Helmies Agent" style="margin-top:8px;" />
         <input id="wfSlackRequestUrl" placeholder="Request URL (gateway endpoint)" value="https://example.com/gateway/inbound" style="margin-top:8px;" />
+        <input id="wfSlackCommandName" placeholder="Slash command" value="/helmies" style="margin-top:8px;" />
         <input id="wfSlackRedirects" placeholder="Redirect URLs comma separated" style="margin-top:8px;" />
         <div class="row" style="margin-top:8px;">
           <button onclick="workforceManifest()">Generate Manifest</button>
@@ -329,6 +331,27 @@
       }
     }
 
+    async function gatewayInboundAsAgent() {
+      try {
+        const agentId = wfTaskAssignee.value ? parseInt(wfTaskAssignee.value, 10) : null;
+        const threadId = wfRunTaskId.value ? `wf-task-${wfRunTaskId.value}` : null;
+        if (!agentId) {
+          out.textContent = JSON.stringify({error:'Set Assignee Agent ID first in Team task section.'}, null, 2);
+          return;
+        }
+        const data = await api('/gateway/inbound','POST',{
+          platform: 'slack',
+          channel_id: '#team',
+          text: msg.value,
+          agent_id: agentId,
+          thread_id: threadId,
+        });
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
     function workforceApplySuggestion() {
       if (!lastSuggestion) {
         out.textContent = JSON.stringify({error:'No suggestion yet. Click Suggest Profile first.'}, null, 2);
@@ -341,7 +364,13 @@
       if (!wfHireDesc.value) {
         wfHireDesc.value = lastSuggestion.summary || '';
       }
-      out.textContent = JSON.stringify({ok:true, applied:true}, null, 2);
+      out.textContent = JSON.stringify({
+        ok:true,
+        applied:true,
+        confidence_score: lastSuggestion.confidence_score,
+        strengths: lastSuggestion.strengths || [],
+        risk_flags: lastSuggestion.risk_flags || [],
+      }, null, 2);
     }
 
     async function workforceHire() {
@@ -412,6 +441,7 @@
           bot_display_name: wfSlackBotName.value,
           request_url: wfSlackRequestUrl.value,
           redirect_urls: toList(wfSlackRedirects.value),
+          command_name: wfSlackCommandName.value || '/helmies',
         });
         out.textContent = JSON.stringify(data, null, 2);
       } catch (e) {

@@ -93,10 +93,13 @@ APIs:
 
 Behavior:
 - system prompt and skills suggested from job title + CV text
+- suggestion now includes confidence score, strengths, and risk flags
 - hired agents stored in DB per tenant
 - team task model supports assignee + collaborators
 - task run executes collaborator subtasks then synthesizes final response
-- Slack app manifest generated for deployment setup
+- task execution now writes to a thread-aware agent-team message bus
+- Slack inbound/gateway can route to specific hired agent persona (`agent_id`)
+- Slack app manifest generated for deployment setup (slash command + interactivity + app home)
 
 ## 6) Push to GitHub with advanced README and description
 

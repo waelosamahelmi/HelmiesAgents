@@ -48,10 +48,13 @@ https://github.com/waelosamahelmi/HelmiesAgents
 
 ### Workforce / Team Mode (extended)
 - job-title + CV based agent profile suggestion
+- confidence scoring + strengths/risk flags for candidate fit
 - “hire agent” flow with stored role prompt + skills
-- Slack manifest generator per hired agent
+- Slack manifest generator per hired agent (slash command + interactivity)
 - team task model with assignee + collaborator agents
 - multi-agent task execution and synthesis endpoint
+- inter-agent message bus with thread IDs and read tracking
+- gateway inbound can route to specific hired agent persona
 - WebUI management panel for workforce operations
 
 ## Quickstart
@@ -102,13 +105,16 @@ Change this immediately via `HELMIES_AUTH_USERS_JSON` in production.
 - `GET /memory/search`
 
 ### Workforce (Agent Teams)
-- `POST /workforce/suggest` (job title + CV -> suggested candidate profile + system prompt + skills)
+- `POST /workforce/suggest` (job title + CV -> suggested candidate profile + system prompt + skills + confidence + strengths + risk flags)
 - `POST /workforce/hire`
 - `GET /workforce/agents`
 - `POST /workforce/tasks`
 - `GET /workforce/tasks`
-- `POST /workforce/tasks/run` (multi-agent execution: assignee + collaborators)
-- `POST /workforce/manifest/slack` (generate Slack app manifest for hired agent)
+- `POST /workforce/tasks/run` (multi-agent execution: assignee + collaborators + thread bus transcript)
+- `POST /workforce/manifest/slack` (generate Slack app manifest for hired agent, with slash command/interactivity)
+- `POST /workforce/bus/message`
+- `GET /workforce/bus/messages`
+- `POST /workforce/bus/mark-read`
 
 ### Skills
 - `GET /skills`
@@ -152,6 +158,8 @@ Matching semantics:
 ### Gateways
 - `POST /gateway/send`
 - `POST /gateway/inbound`
+  - supports routing to hired workforce persona with optional `agent_id`
+  - supports workforce thread linking with optional `thread_id`
 
 ### Approvals
 - `POST /approvals/check`
