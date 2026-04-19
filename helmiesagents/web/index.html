@@ -98,6 +98,9 @@
       <button onclick="listRuns()">Workflow Runs</button>
       <button onclick="listAudit()">Audit Logs</button>
       <button class="secondary" onclick="gatewayInboundAsAgent()">Gateway Inbound As Hired Agent</button>
+      <button class="secondary" onclick="runRecurringNow()">Run Recurring Now</button>
+      <button class="secondary" onclick="listRecurring()">List Recurring</button>
+      <button class="secondary" onclick="listSlackInstalls()">Slack Installs</button>
     </div>
     <div class="row" style="margin-top:10px;">
       <input id="session" placeholder="session id" value="web-default" />
@@ -160,21 +163,59 @@
           <button class="warn" onclick="workforceRunTask()">Run Task</button>
         </div>
         <input id="wfRunTaskId" placeholder="Task ID to run" style="margin-top:8px;" />
+
+        <h4 style="margin-top:14px;">Recurring task scheduler</h4>
+        <div class="row4">
+          <input id="wfRecurringMinutes" placeholder="Interval minutes" value="60" />
+          <select id="wfRecurringAutoRun">
+            <option value="false" selected>Auto run off</option>
+            <option value="true">Auto run on</option>
+          </select>
+          <select id="wfRecurringEnabled">
+            <option value="true" selected>Enabled</option>
+            <option value="false">Disabled</option>
+          </select>
+          <select id="wfRecurringStartNow">
+            <option value="true" selected>Start now</option>
+            <option value="false">Start later</option>
+          </select>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button onclick="createRecurring()">Create Recurring</button>
+          <input id="wfRecurringId" placeholder="Recurring ID for update / run" />
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button class="secondary" onclick="updateRecurring()">Update Recurring</button>
+          <button class="secondary" onclick="runRecurringOne()">Run Selected Recurring</button>
+        </div>
       </div>
 
       <div>
-        <h4>Slack manifest</h4>
+        <h4>Slack manifest + OAuth installer</h4>
         <input id="wfSlackAppName" placeholder="Slack app name" value="HelmiesAI-Agent" />
         <input id="wfSlackBotName" placeholder="Bot display name" value="Helmies Agent" style="margin-top:8px;" />
         <input id="wfSlackRequestUrl" placeholder="Request URL (gateway endpoint)" value="https://example.com/gateway/inbound" style="margin-top:8px;" />
         <input id="wfSlackCommandName" placeholder="Slash command" value="/helmies" style="margin-top:8px;" />
-        <input id="wfSlackRedirects" placeholder="Redirect URLs comma separated" style="margin-top:8px;" />
+        <input id="wfSlackRedirects" placeholder="Redirect URLs comma separated" value="https://example.com/slack/oauth/callback" style="margin-top:8px;" />
         <div class="row" style="margin-top:8px;">
           <button onclick="workforceManifest()">Generate Manifest</button>
           <button class="secondary" onclick="workforceListAgents()">List Agents</button>
         </div>
+        <div class="row" style="margin-top:8px;">
+          <button class="secondary" onclick="startSlackOAuth()">Start Slack OAuth</button>
+          <button class="secondary" onclick="simulateSlackCallback()">Simulate OAuth Callback</button>
+        </div>
         <button class="secondary" style="margin-top:8px;" onclick="workforceListTasks()">List Tasks</button>
       </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <h4>Kanban board (team tasks)</h4>
+      <div class="row" style="margin-bottom:8px;">
+        <button class="secondary" onclick="refreshKanban()">Refresh Kanban</button>
+        <input id="wfKanbanFilter" placeholder="Optional status filter (open,in_progress,completed,blocked,cancelled)" />
+      </div>
+      <div id="wfKanban" class="split"></div>
     </div>
   </div>
 
@@ -444,6 +485,166 @@
           command_name: wfSlackCommandName.value || '/helmies',
         });
         out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function createRecurring() {
+      try {
+        const data = await api('/workforce/recurring', 'POST', {
+          title: wfTaskTitle.value,
+          description: wfTaskDesc.value,
+          assignee_agent_id: wfTaskAssignee.value ? parseInt(wfTaskAssignee.value, 10) : null,
+          collaborator_agent_ids: toIntList(wfTaskCollabs.value),
+          priority: wfTaskPriority.value || 'medium',
+          interval_minutes: parseInt(wfRecurringMinutes.value || '60', 10),
+          auto_run: wfRecurringAutoRun.value === 'true',
+          enabled: wfRecurringEnabled.value === 'true',
+          start_immediately: wfRecurringStartNow.value === 'true',
+        });
+        if (data.recurring_id) wfRecurringId.value = String(data.recurring_id);
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function updateRecurring() {
+      try {
+        const rid = parseInt(wfRecurringId.value, 10);
+        if (!Number.isInteger(rid)) {
+          out.textContent = JSON.stringify({error:'Set valid Recurring ID first'}, null, 2);
+          return;
+        }
+        const data = await api(`/workforce/recurring/item/${rid}`, 'POST', {
+          enabled: wfRecurringEnabled.value === 'true',
+          auto_run: wfRecurringAutoRun.value === 'true',
+          interval_minutes: parseInt(wfRecurringMinutes.value || '60', 10),
+        });
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function runRecurringOne() {
+      try {
+        const rid = parseInt(wfRecurringId.value, 10);
+        if (!Number.isInteger(rid)) {
+          out.textContent = JSON.stringify({error:'Set valid Recurring ID first'}, null, 2);
+          return;
+        }
+        const data = await api(`/workforce/recurring/run_once?recurring_id=${rid}`, 'POST');
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function runRecurringNow() {
+      try {
+        const data = await api('/workforce/recurring/run_once', 'POST');
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function listRecurring() {
+      try {
+        const data = await api('/workforce/recurring');
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function startSlackOAuth() {
+      try {
+        const data = await api('/workforce/slack/oauth/start', 'POST', {
+          app_name: wfSlackAppName.value,
+          request_url: wfSlackRequestUrl.value,
+          redirect_urls: toList(wfSlackRedirects.value),
+          command_name: wfSlackCommandName.value || '/helmies',
+        });
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function simulateSlackCallback() {
+      try {
+        const started = await api('/workforce/slack/oauth/start', 'POST', {
+          app_name: wfSlackAppName.value,
+          request_url: wfSlackRequestUrl.value,
+          redirect_urls: toList(wfSlackRedirects.value),
+          command_name: wfSlackCommandName.value || '/helmies',
+        });
+        const data = await api('/workforce/slack/oauth/callback', 'POST', {
+          state: started.state,
+          code: 'simulated-code',
+          team_id: 'T-simulated',
+          team_name: 'Simulated Team',
+          app_id: 'A-simulated',
+          bot_user_id: 'U-simulated',
+          access_token: 'xoxb-simulated',
+          scope: 'chat:write,commands',
+          incoming_webhook_url: 'https://hooks.slack.com/services/simulated',
+        });
+        out.textContent = JSON.stringify({ started, callback: data }, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function listSlackInstalls() {
+      try {
+        const data = await api('/workforce/slack/installations');
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    function renderKanbanColumn(title, items) {
+      const wrap = document.createElement('div');
+      wrap.className = 'card';
+      wrap.style.margin = '0';
+      const h = document.createElement('h4');
+      h.textContent = `${title} (${items.length})`;
+      wrap.appendChild(h);
+      items.forEach((t) => {
+        const row = document.createElement('div');
+        row.style.padding = '8px';
+        row.style.border = '1px solid var(--line2)';
+        row.style.borderRadius = '8px';
+        row.style.marginBottom = '8px';
+        row.innerHTML = `<div><b>#${t.id}</b> ${t.title}</div><div class="muted">priority=${t.priority} assignee=${t.assignee_agent_id || '-'} updated=${t.updated_at || '-'}</div>`;
+        wrap.appendChild(row);
+      });
+      return wrap;
+    }
+
+    async function refreshKanban() {
+      try {
+        const filter = (wfKanbanFilter.value || '').trim();
+        const data = await api(filter ? `/workforce/tasks?status=${encodeURIComponent(filter)}` : '/workforce/tasks');
+        const tasks = data.tasks || [];
+        const groups = {
+          open: tasks.filter(t => t.status === 'open'),
+          in_progress: tasks.filter(t => t.status === 'in_progress'),
+          completed: tasks.filter(t => t.status === 'completed'),
+          blocked: tasks.filter(t => t.status === 'blocked'),
+          cancelled: tasks.filter(t => t.status === 'cancelled'),
+        };
+        wfKanban.innerHTML = '';
+        wfKanban.appendChild(renderKanbanColumn('Open', groups.open));
+        wfKanban.appendChild(renderKanbanColumn('In Progress', groups.in_progress));
+        wfKanban.appendChild(renderKanbanColumn('Completed', groups.completed));
+        wfKanban.appendChild(renderKanbanColumn('Blocked', groups.blocked));
+        wfKanban.appendChild(renderKanbanColumn('Cancelled', groups.cancelled));
       } catch (e) {
         out.textContent = JSON.stringify(e, null, 2);
       }

@@ -39,11 +39,13 @@ All requested phases have been implemented in this repository as a production-fo
 - role+cv suggestion endpoint (now with confidence score + strengths + risk flags)
 - hire/list workforce agents endpoints
 - slack manifest generator endpoint (enhanced with slash command + interactivity + app home)
-- workforce tasks create/list/run endpoints
+- workforce tasks create/list/run endpoints + explicit status updates (`/workforce/tasks/{task_id}/status`)
+- recurring workforce scheduler endpoints (`/workforce/recurring`, `/workforce/recurring/item/{id}`, `/workforce/recurring/run_once`)
 - collaborator-assisted execution synthesis
 - agent-team message bus with thread IDs and read tracking
 - slack inbound routing to hired agent persona (`agent_id` + `thread_id` aware)
-- WebUI workforce management controls
+- slack OAuth wizard backend with state persistence and installations registry
+- WebUI workforce management controls + control-center buttons + kanban lanes
 
 ## Validation
 - unit tests passing
@@ -52,3 +54,4 @@ All requested phases have been implemented in this repository as a production-fo
 - benchmark run + listing
 - auth and role checks
 - workforce API tests (suggest/hire/manifest/task-run)
+- workforce scheduler + Slack OAuth wizard tests

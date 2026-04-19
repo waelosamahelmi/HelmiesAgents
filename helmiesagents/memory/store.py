@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 
@@ -216,6 +216,78 @@ class MemoryStore:
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_workforce_bus_inbox ON workforce_bus_messages(tenant_id, to_agent_id, id)"
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS workforce_recurring (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    assignee_agent_id INTEGER,
+                    collaborator_agent_ids_json TEXT NOT NULL,
+                    priority TEXT NOT NULL,
+                    interval_minutes INTEGER NOT NULL,
+                    auto_run INTEGER NOT NULL,
+                    enabled INTEGER NOT NULL,
+                    last_run_at TEXT,
+                    next_run_at TEXT NOT NULL,
+                    last_task_id INTEGER,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_workforce_recurring_due ON workforce_recurring(tenant_id, enabled, next_run_at, id)"
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS workforce_slack_oauth_states (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id TEXT NOT NULL,
+                    state TEXT NOT NULL UNIQUE,
+                    app_name TEXT NOT NULL,
+                    request_url TEXT NOT NULL,
+                    redirect_urls_json TEXT NOT NULL,
+                    command_name TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_workforce_slack_oauth_states_tenant ON workforce_slack_oauth_states(tenant_id, created_at, id)"
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS workforce_slack_installations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tenant_id TEXT NOT NULL,
+                    team_id TEXT NOT NULL,
+                    team_name TEXT,
+                    app_id TEXT,
+                    bot_user_id TEXT,
+                    access_token TEXT NOT NULL,
+                    scope TEXT,
+                    incoming_webhook_url TEXT,
+                    app_name TEXT NOT NULL,
+                    request_url TEXT NOT NULL,
+                    command_name TEXT NOT NULL,
+                    installed_by TEXT NOT NULL,
+                    oauth_state TEXT NOT NULL,
+                    installed_at TEXT NOT NULL,
+                    UNIQUE(tenant_id, team_id, app_name)
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_workforce_slack_installations_tenant ON workforce_slack_installations(tenant_id, installed_at, id)"
             )
 
     def add_message(self, tenant_id: str, user_id: str, session_id: str, role: str, content: str) -> None:
@@ -667,3 +739,278 @@ class MemoryStore:
                     (now, tenant_id, thread_id, to_agent_id),
                 )
             return int(cur.rowcount)
+
+    # Workforce recurring scheduler
+    def create_workforce_recurring(
+        self,
+        *,
+        tenant_id: str,
+        created_by: str,
+        title: str,
+        description: str,
+        assignee_agent_id: int | None,
+        collaborator_agent_ids: list[int] | None,
+        priority: str,
+        interval_minutes: int,
+        auto_run: bool,
+        enabled: bool,
+        start_immediately: bool,
+    ) -> int:
+        now = datetime.utcnow()
+        next_run = now if start_immediately else now + timedelta(minutes=max(1, interval_minutes))
+        now_iso = now.isoformat()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO workforce_recurring(
+                    tenant_id, created_by, title, description, assignee_agent_id,
+                    collaborator_agent_ids_json, priority, interval_minutes, auto_run, enabled,
+                    last_run_at, next_run_at, last_task_id, created_at, updated_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    tenant_id,
+                    created_by,
+                    title,
+                    description,
+                    assignee_agent_id,
+                    json.dumps(collaborator_agent_ids or []),
+                    priority,
+                    max(1, interval_minutes),
+                    int(bool(auto_run)),
+                    int(bool(enabled)),
+                    None,
+                    next_run.isoformat(),
+                    None,
+                    now_iso,
+                    now_iso,
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def list_workforce_recurring(self, tenant_id: str, enabled: bool | None = None, limit: int = 200) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            if enabled is None:
+                rows = conn.execute(
+                    "SELECT * FROM workforce_recurring WHERE tenant_id=? ORDER BY id DESC LIMIT ?",
+                    (tenant_id, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM workforce_recurring WHERE tenant_id=? AND enabled=? ORDER BY id DESC LIMIT ?",
+                    (tenant_id, int(bool(enabled)), limit),
+                ).fetchall()
+
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            row = dict(r)
+            row["collaborator_agent_ids"] = json.loads(row.get("collaborator_agent_ids_json") or "[]")
+            row["auto_run"] = bool(row.get("auto_run"))
+            row["enabled"] = bool(row.get("enabled"))
+            out.append(row)
+        return out
+
+    def get_workforce_recurring(self, tenant_id: str, recurring_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM workforce_recurring WHERE tenant_id=? AND id=?",
+                (tenant_id, recurring_id),
+            ).fetchone()
+        if not row:
+            return None
+        out = dict(row)
+        out["collaborator_agent_ids"] = json.loads(out.get("collaborator_agent_ids_json") or "[]")
+        out["auto_run"] = bool(out.get("auto_run"))
+        out["enabled"] = bool(out.get("enabled"))
+        return out
+
+    def update_workforce_recurring(
+        self,
+        *,
+        tenant_id: str,
+        recurring_id: int,
+        enabled: bool | None = None,
+        auto_run: bool | None = None,
+        interval_minutes: int | None = None,
+        next_run_at: str | None = None,
+        last_run_at: str | None = None,
+        last_task_id: int | None = None,
+    ) -> bool:
+        sets: list[str] = []
+        values: list[Any] = []
+
+        if enabled is not None:
+            sets.append("enabled=?")
+            values.append(int(bool(enabled)))
+        if auto_run is not None:
+            sets.append("auto_run=?")
+            values.append(int(bool(auto_run)))
+        if interval_minutes is not None:
+            sets.append("interval_minutes=?")
+            values.append(max(1, int(interval_minutes)))
+        if next_run_at is not None:
+            sets.append("next_run_at=?")
+            values.append(next_run_at)
+        if last_run_at is not None:
+            sets.append("last_run_at=?")
+            values.append(last_run_at)
+        if last_task_id is not None:
+            sets.append("last_task_id=?")
+            values.append(last_task_id)
+
+        sets.append("updated_at=?")
+        values.append(datetime.utcnow().isoformat())
+
+        values.extend([tenant_id, recurring_id])
+        q = f"UPDATE workforce_recurring SET {', '.join(sets)} WHERE tenant_id=? AND id=?"
+        with self._connect() as conn:
+            cur = conn.execute(q, tuple(values))
+            return cur.rowcount > 0
+
+    def due_workforce_recurring(self, tenant_id: str, now_iso: str, limit: int = 100) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM workforce_recurring
+                WHERE tenant_id=? AND enabled=1 AND next_run_at<=?
+                ORDER BY next_run_at ASC, id ASC
+                LIMIT ?
+                """,
+                (tenant_id, now_iso, limit),
+            ).fetchall()
+
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            row = dict(r)
+            row["collaborator_agent_ids"] = json.loads(row.get("collaborator_agent_ids_json") or "[]")
+            row["auto_run"] = bool(row.get("auto_run"))
+            row["enabled"] = bool(row.get("enabled"))
+            out.append(row)
+        return out
+
+    # Slack OAuth wizard persistence
+    def create_workforce_slack_oauth_state(
+        self,
+        *,
+        tenant_id: str,
+        state: str,
+        app_name: str,
+        request_url: str,
+        redirect_urls: list[str],
+        command_name: str,
+        created_by: str,
+        expires_at: str,
+    ) -> int:
+        now = datetime.utcnow().isoformat()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO workforce_slack_oauth_states(
+                    tenant_id, state, app_name, request_url, redirect_urls_json,
+                    command_name, created_by, expires_at, created_at
+                ) VALUES(?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    tenant_id,
+                    state,
+                    app_name,
+                    request_url,
+                    json.dumps(redirect_urls),
+                    command_name,
+                    created_by,
+                    expires_at,
+                    now,
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def get_workforce_slack_oauth_state(self, tenant_id: str, state: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM workforce_slack_oauth_states WHERE tenant_id=? AND state=?",
+                (tenant_id, state),
+            ).fetchone()
+        if not row:
+            return None
+        out = dict(row)
+        out["redirect_urls"] = json.loads(out.get("redirect_urls_json") or "[]")
+        return out
+
+    def delete_workforce_slack_oauth_state(self, tenant_id: str, state: str) -> int:
+        with self._connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM workforce_slack_oauth_states WHERE tenant_id=? AND state=?",
+                (tenant_id, state),
+            )
+            return int(cur.rowcount)
+
+    def upsert_workforce_slack_installation(
+        self,
+        *,
+        tenant_id: str,
+        team_id: str,
+        team_name: str | None,
+        app_id: str | None,
+        bot_user_id: str | None,
+        access_token: str,
+        scope: str | None,
+        incoming_webhook_url: str | None,
+        app_name: str,
+        request_url: str,
+        command_name: str,
+        installed_by: str,
+        oauth_state: str,
+    ) -> int:
+        now = datetime.utcnow().isoformat()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO workforce_slack_installations(
+                    tenant_id, team_id, team_name, app_id, bot_user_id,
+                    access_token, scope, incoming_webhook_url,
+                    app_name, request_url, command_name, installed_by, oauth_state, installed_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(tenant_id, team_id, app_name) DO UPDATE SET
+                    team_name=excluded.team_name,
+                    app_id=excluded.app_id,
+                    bot_user_id=excluded.bot_user_id,
+                    access_token=excluded.access_token,
+                    scope=excluded.scope,
+                    incoming_webhook_url=excluded.incoming_webhook_url,
+                    request_url=excluded.request_url,
+                    command_name=excluded.command_name,
+                    installed_by=excluded.installed_by,
+                    oauth_state=excluded.oauth_state,
+                    installed_at=excluded.installed_at
+                """,
+                (
+                    tenant_id,
+                    team_id,
+                    team_name,
+                    app_id,
+                    bot_user_id,
+                    access_token,
+                    scope,
+                    incoming_webhook_url,
+                    app_name,
+                    request_url,
+                    command_name,
+                    installed_by,
+                    oauth_state,
+                    now,
+                ),
+            )
+            return int(cur.lastrowid) if cur.lastrowid is not None else 0
+
+    def list_workforce_slack_installations(self, tenant_id: str, limit: int = 200) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM workforce_slack_installations
+                WHERE tenant_id=?
+                ORDER BY installed_at DESC, id DESC
+                LIMIT ?
+                """,
+                (tenant_id, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]

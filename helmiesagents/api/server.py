@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import secrets
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -120,8 +123,35 @@ class WorkforceTaskRequest(BaseModel):
     priority: str = "medium"
 
 
+class WorkforceTaskStatusRequest(BaseModel):
+    status: str
+
+
 class WorkforceTaskRunRequest(BaseModel):
     task_id: int
+
+
+class WorkforceRecurringCreateRequest(BaseModel):
+    title: str
+    description: str
+    assignee_agent_id: int | None = None
+    collaborator_agent_ids: list[int] = []
+    priority: str = "medium"
+    interval_minutes: int = 60
+    auto_run: bool = False
+    enabled: bool = True
+    start_immediately: bool = False
+
+
+class WorkforceRecurringRunOnceRequest(BaseModel):
+    recurring_id: int | None = None
+    limit: int = 100
+
+
+class WorkforceRecurringUpdateRequest(BaseModel):
+    enabled: bool | None = None
+    auto_run: bool | None = None
+    interval_minutes: int | None = None
 
 
 class WorkforceBusMessageRequest(BaseModel):
@@ -143,6 +173,25 @@ class SlackManifestRequest(BaseModel):
     request_url: str
     redirect_urls: list[str] = []
     command_name: str = "/helmies"
+
+
+class SlackOAuthStartRequest(BaseModel):
+    app_name: str
+    request_url: str
+    redirect_urls: list[str] = []
+    command_name: str = "/helmies"
+
+
+class SlackOAuthCallbackRequest(BaseModel):
+    state: str
+    code: str
+    team_id: str
+    team_name: str | None = None
+    app_id: str | None = None
+    bot_user_id: str | None = None
+    access_token: str
+    scope: str | None = None
+    incoming_webhook_url: str | None = None
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -626,6 +675,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         return {"ok": True, "task_id": task_id}
 
+    @app.post("/workforce/tasks/{task_id}/status")
+    def workforce_update_task_status(task_id: int, req: WorkforceTaskStatusRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        normalized = (req.status or "").strip().lower()
+        allowed = {"open", "in_progress", "completed", "blocked", "cancelled"}
+        if normalized not in allowed:
+            raise HTTPException(status_code=400, detail=f"invalid status; allowed={sorted(allowed)}")
+
+        ok = memory.update_workforce_task(
+            tenant_id=ctx.tenant_id,
+            task_id=task_id,
+            status=normalized,
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="task not found")
+
+        memory.log_audit(
+            tenant_id=ctx.tenant_id,
+            user_id=ctx.user_id,
+            event_type="workforce_task_status_update",
+            payload_json=json.dumps({"task_id": task_id, "status": normalized}),
+        )
+        return {"ok": True, "task_id": task_id, "status": normalized}
+
     @app.get("/workforce/tasks")
     def workforce_tasks(status: str | None = None, limit: int = 200, authorization: str | None = Header(default=None)) -> dict[str, Any]:
         ctx = get_ctx(authorization)
@@ -643,6 +716,101 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             actor_user_id=ctx.user_id,
         )
         return {"ok": True, "result": result}
+
+    @app.post("/workforce/recurring")
+    def workforce_recurring_create(req: WorkforceRecurringCreateRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        if not is_admin(ctx):
+            raise HTTPException(status_code=403, detail="admin required")
+
+        recurring_id = memory.create_workforce_recurring(
+            tenant_id=ctx.tenant_id,
+            created_by=ctx.user_id,
+            title=req.title,
+            description=req.description,
+            assignee_agent_id=req.assignee_agent_id,
+            collaborator_agent_ids=req.collaborator_agent_ids,
+            priority=req.priority,
+            interval_minutes=req.interval_minutes,
+            auto_run=req.auto_run,
+            enabled=req.enabled,
+            start_immediately=req.start_immediately,
+        )
+        return {"ok": True, "recurring_id": recurring_id}
+
+    @app.get("/workforce/recurring")
+    def workforce_recurring_list(enabled: bool | None = None, limit: int = 200, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        items = memory.list_workforce_recurring(ctx.tenant_id, enabled=enabled, limit=limit)
+        return {"items": items}
+
+    @app.post("/workforce/recurring/item/{recurring_id}")
+    def workforce_recurring_update(recurring_id: int, req: WorkforceRecurringUpdateRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        if not is_admin(ctx):
+            raise HTTPException(status_code=403, detail="admin required")
+
+        ok = memory.update_workforce_recurring(
+            tenant_id=ctx.tenant_id,
+            recurring_id=recurring_id,
+            enabled=req.enabled,
+            auto_run=req.auto_run,
+            interval_minutes=req.interval_minutes,
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="recurring item not found")
+        return {"ok": True, "recurring_id": recurring_id}
+
+    @app.post("/workforce/recurring/run_once")
+    def workforce_recurring_run_once(
+        recurring_id: int | None = None,
+        limit: int = 100,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+
+        if recurring_id is not None:
+            row = memory.get_workforce_recurring(ctx.tenant_id, recurring_id)
+            if not row:
+                raise HTTPException(status_code=404, detail="recurring item not found")
+            due_rows = [row]
+        else:
+            due_rows = memory.due_workforce_recurring(ctx.tenant_id, datetime.utcnow().isoformat(), limit=max(1, limit))
+
+        created_task_ids: list[int] = []
+        for row in due_rows:
+            task_id = workforce.create_task(
+                tenant_id=ctx.tenant_id,
+                created_by=ctx.user_id,
+                title=row.get("title", "Recurring task"),
+                description=row.get("description", ""),
+                assignee_agent_id=row.get("assignee_agent_id"),
+                collaborator_agent_ids=row.get("collaborator_agent_ids") or [],
+                priority=row.get("priority", "medium"),
+            )
+            created_task_ids.append(task_id)
+
+            next_run = datetime.utcnow() + timedelta(minutes=max(1, int(row.get("interval_minutes") or 60)))
+            memory.update_workforce_recurring(
+                tenant_id=ctx.tenant_id,
+                recurring_id=int(row.get("id")),
+                last_run_at=datetime.utcnow().isoformat(),
+                next_run_at=next_run.isoformat(),
+                last_task_id=task_id,
+            )
+
+            if bool(row.get("auto_run")):
+                try:
+                    workforce.run_task(
+                        agent=agent,
+                        tenant_id=ctx.tenant_id,
+                        task_id=task_id,
+                        actor_user_id=ctx.user_id,
+                    )
+                except Exception:
+                    pass
+
+        return {"ok": True, "created_task_ids": created_task_ids}
 
     @app.post("/workforce/bus/message")
     def workforce_bus_message(req: WorkforceBusMessageRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
@@ -682,6 +850,92 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             to_agent_id=req.to_agent_id,
         )
         return {"ok": True, "updated": updated}
+
+    @app.post("/workforce/slack/oauth/start")
+    def workforce_slack_oauth_start(req: SlackOAuthStartRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        if not is_admin(ctx):
+            raise HTTPException(status_code=403, detail="admin required")
+
+        client_id = settings.slack_client_id or ""
+        redirect_uri = settings.slack_oauth_redirect_url or (req.redirect_urls[0] if req.redirect_urls else "")
+        if not client_id or not redirect_uri:
+            raise HTTPException(status_code=400, detail="Slack OAuth env is not configured")
+
+        state = secrets.token_urlsafe(24)
+        expires_at = (datetime.utcnow() + timedelta(minutes=15)).isoformat()
+        memory.create_workforce_slack_oauth_state(
+            tenant_id=ctx.tenant_id,
+            state=state,
+            app_name=req.app_name,
+            request_url=req.request_url,
+            redirect_urls=req.redirect_urls,
+            command_name=req.command_name,
+            created_by=ctx.user_id,
+            expires_at=expires_at,
+        )
+
+        params = {
+            "client_id": client_id,
+            "scope": "app_mentions:read,channels:history,channels:read,chat:write,chat:write.public,commands,groups:history,im:history,im:read,im:write,mpim:history,users:read",
+            "redirect_uri": redirect_uri,
+            "state": state,
+        }
+        install_url = f"https://slack.com/oauth/v2/authorize?{urlencode(params)}"
+        return {"ok": True, "state": state, "install_url": install_url, "redirect_uri": redirect_uri}
+
+    @app.post("/workforce/slack/oauth/callback")
+    def workforce_slack_oauth_callback(req: SlackOAuthCallbackRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        if not is_admin(ctx):
+            raise HTTPException(status_code=403, detail="admin required")
+
+        st = memory.get_workforce_slack_oauth_state(ctx.tenant_id, req.state)
+        if not st:
+            raise HTTPException(status_code=400, detail="invalid oauth state")
+
+        expires_at_raw = st.get("expires_at")
+        if expires_at_raw:
+            try:
+                exp_dt = datetime.fromisoformat(expires_at_raw)
+                if exp_dt < datetime.utcnow():
+                    memory.delete_workforce_slack_oauth_state(ctx.tenant_id, req.state)
+                    raise HTTPException(status_code=400, detail="oauth state expired")
+            except HTTPException:
+                raise
+            except Exception:
+                pass
+
+        memory.upsert_workforce_slack_installation(
+            tenant_id=ctx.tenant_id,
+            team_id=req.team_id,
+            team_name=req.team_name,
+            app_id=req.app_id,
+            bot_user_id=req.bot_user_id,
+            access_token=req.access_token,
+            scope=req.scope,
+            incoming_webhook_url=req.incoming_webhook_url,
+            app_name=st.get("app_name") or "HelmiesAI",
+            request_url=st.get("request_url") or "",
+            command_name=st.get("command_name") or "/helmies",
+            installed_by=ctx.user_id,
+            oauth_state=req.state,
+        )
+        memory.delete_workforce_slack_oauth_state(ctx.tenant_id, req.state)
+
+        memory.log_audit(
+            tenant_id=ctx.tenant_id,
+            user_id=ctx.user_id,
+            event_type="workforce_slack_oauth_install",
+            payload_json=json.dumps({"team_id": req.team_id, "team_name": req.team_name, "app_id": req.app_id}),
+        )
+        return {"ok": True, "team_id": req.team_id, "team_name": req.team_name}
+
+    @app.get("/workforce/slack/installations")
+    def workforce_slack_installations(limit: int = 200, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        items = memory.list_workforce_slack_installations(ctx.tenant_id, limit=limit)
+        return {"items": items}
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:

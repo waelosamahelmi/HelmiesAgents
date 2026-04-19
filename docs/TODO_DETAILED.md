@@ -74,8 +74,8 @@
 
 - [x] Slack inbound mention -> route to specific hired agent persona
 - [x] Agent-to-agent message bus with conversation thread IDs
-- [ ] Workforce Kanban board + assignment drag/drop UI
-- [ ] Real scheduler for recurring workforce tasks
+- [x] Workforce Kanban board (control-center panel) + status-oriented task lanes
+- [x] Real scheduler for recurring workforce tasks (API + persistence + manual tick)
 - [ ] Optional per-agent model/provider settings
-- [ ] Full Next.js admin WebUI with analytics, kanban, and org-level control center
-- [ ] Slack manifest installer wizard + OAuth callback automation
+- [ ] Full Next.js admin WebUI with analytics and org-level control center (current panel is server-rendered HTML)
+- [x] Slack manifest installer wizard + OAuth callback automation (backend + persistence)

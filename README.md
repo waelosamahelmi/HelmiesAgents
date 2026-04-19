@@ -51,11 +51,13 @@ https://github.com/waelosamahelmi/HelmiesAgents
 - confidence scoring + strengths/risk flags for candidate fit
 - “hire agent” flow with stored role prompt + skills
 - Slack manifest generator per hired agent (slash command + interactivity)
+- Slack OAuth installer wizard backend (stateful start + callback + installation persistence)
 - team task model with assignee + collaborator agents
 - multi-agent task execution and synthesis endpoint
+- recurring workforce scheduler (create/list/update/manual run)
 - inter-agent message bus with thread IDs and read tracking
 - gateway inbound can route to specific hired agent persona
-- WebUI management panel for workforce operations
+- WebUI management panel for workforce operations + Kanban view
 
 ## Quickstart
 
@@ -109,9 +111,17 @@ Change this immediately via `HELMIES_AUTH_USERS_JSON` in production.
 - `POST /workforce/hire`
 - `GET /workforce/agents`
 - `POST /workforce/tasks`
+- `POST /workforce/tasks/{task_id}/status`
 - `GET /workforce/tasks`
 - `POST /workforce/tasks/run` (multi-agent execution: assignee + collaborators + thread bus transcript)
+- `POST /workforce/recurring` (create recurring scheduler item)
+- `GET /workforce/recurring`
+- `POST /workforce/recurring/item/{recurring_id}` (update enable/auto-run/interval)
+- `POST /workforce/recurring/run_once` (manual tick; optional `recurring_id` query)
 - `POST /workforce/manifest/slack` (generate Slack app manifest for hired agent, with slash command/interactivity)
+- `POST /workforce/slack/oauth/start`
+- `POST /workforce/slack/oauth/callback`
+- `GET /workforce/slack/installations`
 - `POST /workforce/bus/message`
 - `GET /workforce/bus/messages`
 - `POST /workforce/bus/mark-read`

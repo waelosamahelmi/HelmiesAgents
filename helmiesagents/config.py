@@ -27,7 +27,7 @@ class Settings:
 
     # auth + tenancy
     jwt_secret: str = "change-me-dev-secret"
-    auth_users_json: str = '[{"username":"admin","password": "admin123","roles":["admin"],"tenant_id":"default"}]'
+    auth_users_json: str = '[{"username":"admin","password":"admin123","roles":["admin"],"tenant_id":"default"}]'
 
     # optional routing policy file
     routing_policy_file: str | None = None
@@ -59,6 +59,10 @@ class Settings:
 
     # gateway credentials
     slack_bot_token: str | None = None
+    slack_client_id: str | None = None
+    slack_client_secret: str | None = None
+    slack_signing_secret: str | None = None
+    slack_oauth_redirect_url: str | None = None
     telegram_bot_token: str | None = None
     discord_bot_token: str | None = None
     whatsapp_api_url: str | None = None
@@ -91,7 +95,7 @@ class Settings:
             jwt_secret=os.getenv("HELMIES_JWT_SECRET", "change-me-dev-secret"),
             auth_users_json=os.getenv(
                 "HELMIES_AUTH_USERS_JSON",
-                '[{"username":"admin","password": "admin123","roles":["admin"],"tenant_id":"default"}]',
+                '[{"username":"admin","password":"admin123","roles":["admin"],"tenant_id":"default"}]',
             ),
             routing_policy_file=os.getenv("HELMIES_ROUTING_POLICY_FILE"),
             policy_dsl_file=os.getenv("HELMIES_POLICY_DSL_FILE"),
@@ -108,6 +112,10 @@ class Settings:
             autonomous_subruns_verify=_env_bool("HELMIES_AUTONOMOUS_SUBRUNS_VERIFY", True),
             execution_budget_file=os.getenv("HELMIES_EXECUTION_BUDGET_FILE"),
             slack_bot_token=os.getenv("SLACK_BOT_TOKEN"),
+            slack_client_id=os.getenv("HELMIES_SLACK_CLIENT_ID"),
+            slack_client_secret=os.getenv("HELMIES_SLACK_CLIENT_SECRET"),
+            slack_signing_secret=os.getenv("HELMIES_SLACK_SIGNING_SECRET"),
+            slack_oauth_redirect_url=os.getenv("HELMIES_SLACK_OAUTH_REDIRECT_URL"),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
             discord_bot_token=os.getenv("DISCORD_BOT_TOKEN"),
             whatsapp_api_url=os.getenv("WHATSAPP_API_URL"),
