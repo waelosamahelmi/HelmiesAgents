@@ -76,6 +76,6 @@
 - [x] Agent-to-agent message bus with conversation thread IDs
 - [x] Workforce Kanban board (control-center panel) + status-oriented task lanes
 - [x] Real scheduler for recurring workforce tasks (API + persistence + manual tick)
-- [ ] Optional per-agent model/provider settings
-- [ ] Full Next.js admin WebUI with analytics and org-level control center (current panel is server-rendered HTML)
+- [x] Optional per-agent model/provider settings
+- [x] Full admin WebUI migration scaffold with API-integrated control center (React webapp + auto-serve dist fallback from API)
 - [x] Slack manifest installer wizard + OAuth callback automation (backend + persistence)

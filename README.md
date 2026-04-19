@@ -58,6 +58,9 @@ https://github.com/waelosamahelmi/HelmiesAgents
 - inter-agent message bus with thread IDs and read tracking
 - gateway inbound can route to specific hired agent persona
 - WebUI management panel for workforce operations + Kanban view
+- per-agent model/provider/base_url preferences (persisted + editable)
+- drag/drop Kanban status transitions wired to `/workforce/tasks/{task_id}/status`
+- admin webapp migration scaffold (`helmiesagents/webapp`, React+Vite) auto-served when `webapp/dist/index.html` exists
 
 ## Quickstart
 
@@ -112,6 +115,7 @@ Change this immediately via `HELMIES_AUTH_USERS_JSON` in production.
 - `GET /workforce/agents`
 - `POST /workforce/tasks`
 - `POST /workforce/tasks/{task_id}/status`
+- `POST /workforce/agents/{agent_id}/model`
 - `GET /workforce/tasks`
 - `POST /workforce/tasks/run` (multi-agent execution: assignee + collaborators + thread bus transcript)
 - `POST /workforce/recurring` (create recurring scheduler item)

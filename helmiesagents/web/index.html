@@ -70,6 +70,11 @@
     .tabs button { margin-right:8px; width:auto; padding:8px 12px; }
     .muted { color:var(--muted); font-size:13px; }
     .split { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .kanban-board { display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; }
+    .kanban-column { min-height: 180px; }
+    .kanban-column.drag-over { outline: 2px dashed var(--accent); outline-offset: -4px; }
+    .kanban-card { cursor: grab; }
+    .kanban-card.dragging { opacity: 0.55; }
   </style>
 </head>
 <body>
@@ -188,6 +193,15 @@
           <button class="secondary" onclick="updateRecurring()">Update Recurring</button>
           <button class="secondary" onclick="runRecurringOne()">Run Selected Recurring</button>
         </div>
+
+        <h4 style="margin-top:14px;">Agent model settings</h4>
+        <div class="row3">
+          <input id="wfModelAgentId" placeholder="Agent ID" />
+          <input id="wfModelProvider" placeholder="Provider (e.g. openai)" />
+          <input id="wfModelName" placeholder="Model (e.g. gpt-4.1-mini)" />
+        </div>
+        <input id="wfModelBaseUrl" placeholder="Base URL (optional)" style="margin-top:8px;" />
+        <button class="secondary" style="margin-top:8px;" onclick="updateAgentModelSettings()">Update Agent Model Settings</button>
       </div>
 
       <div>
@@ -215,7 +229,7 @@
         <button class="secondary" onclick="refreshKanban()">Refresh Kanban</button>
         <input id="wfKanbanFilter" placeholder="Optional status filter (open,in_progress,completed,blocked,cancelled)" />
       </div>
-      <div id="wfKanban" class="split"></div>
+      <div id="wfKanban" class="kanban-board"></div>
     </div>
   </div>
 
@@ -230,8 +244,19 @@
   </div>
 
   <script>
-    let token = null;
+    let token = null
     let lastSuggestion = null;
+    let draggedTaskId = null;
+    let draggedFromStatus = null;
+
+    const KANBAN_STATUSES = ['open', 'in_progress', 'completed', 'blocked', 'cancelled'];
+    const KANBAN_LABELS = {
+      open: 'Open',
+      in_progress: 'In Progress',
+      completed: 'Completed',
+      blocked: 'Blocked',
+      cancelled: 'Cancelled',
+    };
 
     function authHeaders(){
       const h = {'Content-Type':'application/json'};
@@ -424,7 +449,14 @@
           cv_text: wfSuggestCV.value || '',
           skills: toList(wfHireSkills.value),
           slack_channels: toList(wfHireChannels.value),
+          model_provider: (wfModelProvider.value || '').trim() || null,
+          model_name: (wfModelName.value || '').trim() || null,
+          model_base_url: (wfModelBaseUrl.value || '').trim() || null,
         });
+        if (data.agent_id) {
+          wfTaskAssignee.value = String(data.agent_id);
+          wfModelAgentId.value = String(data.agent_id);
+        }
         out.textContent = JSON.stringify(data, null, 2);
       } catch (e) {
         out.textContent = JSON.stringify(e, null, 2);
@@ -434,6 +466,31 @@
     async function workforceListAgents() {
       try {
         const data = await api('/workforce/agents');
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    async function updateAgentModelSettings() {
+      try {
+        const agentId = parseInt(wfModelAgentId.value, 10);
+        if (!Number.isInteger(agentId)) {
+          out.textContent = JSON.stringify({error:'Set a valid Agent ID first.'}, null, 2);
+          return;
+        }
+
+        const body = {
+          model_provider: (wfModelProvider.value || '').trim() || null,
+          model_name: (wfModelName.value || '').trim() || null,
+          model_base_url: (wfModelBaseUrl.value || '').trim() || null,
+        };
+        if (!body.model_provider && !body.model_name && !body.model_base_url) {
+          out.textContent = JSON.stringify({error:'Provide at least one model setting.'}, null, 2);
+          return;
+        }
+
+        const data = await api(`/workforce/agents/${agentId}/model`, 'POST', body);
         out.textContent = JSON.stringify(data, null, 2);
       } catch (e) {
         out.textContent = JSON.stringify(e, null, 2);
@@ -608,15 +665,72 @@
       }
     }
 
-    function renderKanbanColumn(title, items) {
+    function handleCardDragStart(ev, taskId, status) {
+      draggedTaskId = taskId;
+      draggedFromStatus = status;
+      ev.dataTransfer.effectAllowed = 'move';
+      ev.dataTransfer.setData('text/plain', String(taskId));
+      ev.currentTarget.classList.add('dragging');
+    }
+
+    function handleCardDragEnd(ev) {
+      ev.currentTarget.classList.remove('dragging');
+    }
+
+    function handleColumnDragOver(ev) {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      ev.currentTarget.classList.add('drag-over');
+    }
+
+    function handleColumnDragLeave(ev) {
+      ev.currentTarget.classList.remove('drag-over');
+    }
+
+    async function updateTaskStatus(taskId, newStatus) {
+      return api(`/workforce/tasks/${taskId}/status`, 'POST', { status: newStatus });
+    }
+
+    async function handleColumnDrop(ev, targetStatus) {
+      ev.preventDefault();
+      ev.currentTarget.classList.remove('drag-over');
+
+      const fromStatus = draggedFromStatus;
+      const taskId = draggedTaskId || parseInt(ev.dataTransfer.getData('text/plain'), 10);
+      draggedTaskId = null;
+      draggedFromStatus = null;
+
+      if (!Number.isInteger(taskId)) return;
+      if (fromStatus === targetStatus) return;
+
+      try {
+        const data = await updateTaskStatus(taskId, targetStatus);
+        out.textContent = JSON.stringify({ ok:true, moved_task_id: taskId, from: fromStatus, to: targetStatus, api: data }, null, 2);
+        await refreshKanban();
+      } catch (e) {
+        out.textContent = JSON.stringify(e, null, 2);
+      }
+    }
+
+    function renderKanbanColumn(status, items) {
       const wrap = document.createElement('div');
-      wrap.className = 'card';
+      wrap.className = 'card kanban-column';
       wrap.style.margin = '0';
+      wrap.dataset.status = status;
+      wrap.ondragover = (ev) => handleColumnDragOver(ev);
+      wrap.ondragleave = (ev) => handleColumnDragLeave(ev);
+      wrap.ondrop = (ev) => handleColumnDrop(ev, status);
+
       const h = document.createElement('h4');
-      h.textContent = `${title} (${items.length})`;
+      h.textContent = `${KANBAN_LABELS[status]} (${items.length})`;
       wrap.appendChild(h);
+
       items.forEach((t) => {
         const row = document.createElement('div');
+        row.className = 'kanban-card';
+        row.draggable = true;
+        row.ondragstart = (ev) => handleCardDragStart(ev, t.id, status);
+        row.ondragend = (ev) => handleCardDragEnd(ev);
         row.style.padding = '8px';
         row.style.border = '1px solid var(--line2)';
         row.style.borderRadius = '8px';
@@ -640,11 +754,9 @@
           cancelled: tasks.filter(t => t.status === 'cancelled'),
         };
         wfKanban.innerHTML = '';
-        wfKanban.appendChild(renderKanbanColumn('Open', groups.open));
-        wfKanban.appendChild(renderKanbanColumn('In Progress', groups.in_progress));
-        wfKanban.appendChild(renderKanbanColumn('Completed', groups.completed));
-        wfKanban.appendChild(renderKanbanColumn('Blocked', groups.blocked));
-        wfKanban.appendChild(renderKanbanColumn('Cancelled', groups.cancelled));
+        KANBAN_STATUSES.forEach((status) => {
+          wfKanban.appendChild(renderKanbanColumn(status, groups[status] || []));
+        });
       } catch (e) {
         out.textContent = JSON.stringify(e, null, 2);
       }

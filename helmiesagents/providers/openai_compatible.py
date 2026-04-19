@@ -24,8 +24,15 @@ class OpenAICompatibleProvider:
             "stream": stream,
         }
 
-    def generate(self, system_prompt: str, user_prompt: str, model_override: str | None = None) -> str:
-        url = f"{self.base_url}/chat/completions"
+    def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model_override: str | None = None,
+        base_url_override: str | None = None,
+    ) -> str:
+        effective_base_url = (base_url_override or self.base_url).rstrip("/")
+        url = f"{effective_base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -37,8 +44,15 @@ class OpenAICompatibleProvider:
             data = res.json()
         return data["choices"][0]["message"]["content"]
 
-    def stream_generate(self, system_prompt: str, user_prompt: str, model_override: str | None = None) -> Iterable[str]:
-        url = f"{self.base_url}/chat/completions"
+    def stream_generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model_override: str | None = None,
+        base_url_override: str | None = None,
+    ) -> Iterable[str]:
+        effective_base_url = (base_url_override or self.base_url).rstrip("/")
+        url = f"{effective_base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",

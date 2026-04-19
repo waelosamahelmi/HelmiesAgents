@@ -26,6 +26,12 @@ class MemoryStore:
         return conn
 
     def _init_db(self) -> None:
+        def _ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+            cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
+            names = {str(c[1]) for c in cols}
+            if column not in names:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
         with self._connect() as conn:
             conn.execute(
                 """
@@ -171,6 +177,9 @@ class MemoryStore:
                     skills_json TEXT NOT NULL,
                     status TEXT NOT NULL,
                     slack_channels_json TEXT NOT NULL,
+                    model_provider TEXT,
+                    model_name TEXT,
+                    model_base_url TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
@@ -289,6 +298,10 @@ class MemoryStore:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_workforce_slack_installations_tenant ON workforce_slack_installations(tenant_id, installed_at, id)"
             )
+
+            _ensure_column(conn, "workforce_agents", "model_provider", "TEXT")
+            _ensure_column(conn, "workforce_agents", "model_name", "TEXT")
+            _ensure_column(conn, "workforce_agents", "model_base_url", "TEXT")
 
     def add_message(self, tenant_id: str, user_id: str, session_id: str, role: str, content: str) -> None:
         with self._connect() as conn:
@@ -470,6 +483,9 @@ class MemoryStore:
         skills: list[str],
         status: str = "hired",
         slack_channels: list[str] | None = None,
+        model_provider: str | None = None,
+        model_name: str | None = None,
+        model_base_url: str | None = None,
     ) -> int:
         now = datetime.utcnow().isoformat()
         with self._connect() as conn:
@@ -477,8 +493,10 @@ class MemoryStore:
                 """
                 INSERT INTO workforce_agents(
                     tenant_id, name, job_title, description, system_prompt, cv_text,
-                    skills_json, status, slack_channels_json, created_at, updated_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                    skills_json, status, slack_channels_json,
+                    model_provider, model_name, model_base_url,
+                    created_at, updated_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     tenant_id,
@@ -490,6 +508,9 @@ class MemoryStore:
                     json.dumps(skills or []),
                     status,
                     json.dumps(slack_channels or []),
+                    model_provider,
+                    model_name,
+                    model_base_url,
                     now,
                     now,
                 ),
@@ -530,6 +551,36 @@ class MemoryStore:
                 "UPDATE workforce_agents SET status=?, updated_at=? WHERE tenant_id=? AND id=?",
                 (status, datetime.utcnow().isoformat(), tenant_id, agent_id),
             )
+            return cur.rowcount > 0
+
+    def update_workforce_agent_model_settings(
+        self,
+        *,
+        tenant_id: str,
+        agent_id: int,
+        model_provider: str | None = None,
+        model_name: str | None = None,
+        model_base_url: str | None = None,
+    ) -> bool:
+        sets: list[str] = []
+        values: list[Any] = []
+        if model_provider is not None:
+            sets.append("model_provider=?")
+            values.append(model_provider)
+        if model_name is not None:
+            sets.append("model_name=?")
+            values.append(model_name)
+        if model_base_url is not None:
+            sets.append("model_base_url=?")
+            values.append(model_base_url)
+
+        sets.append("updated_at=?")
+        values.append(datetime.utcnow().isoformat())
+
+        values.extend([tenant_id, agent_id])
+        q = f"UPDATE workforce_agents SET {', '.join(sets)} WHERE tenant_id=? AND id=?"
+        with self._connect() as conn:
+            cur = conn.execute(q, tuple(values))
             return cur.rowcount > 0
 
     def create_workforce_task(

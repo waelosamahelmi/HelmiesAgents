@@ -1,0 +1,22 @@
+:root {
+  --bg:#0b0f14;
+  --panel:#101722;
+  --muted:#9eb0c1;
+  --line:#243243;
+  --line2:#2b3b4d;
+  --text:#e8edf2;
+  --accent:#2563eb;
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:Inter, Arial, sans-serif; }
+.app { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
+.card { border:1px solid var(--line); border-radius:12px; padding:12px; margin:10px 0; background:var(--panel); }
+.row { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+.row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; }
+.kanban { display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; }
+.col { border:1px solid var(--line2); border-radius:10px; min-height:160px; padding:8px; }
+.col.drag-over { outline:2px dashed var(--accent); }
+.task { border:1px solid var(--line2); border-radius:8px; padding:8px; margin-bottom:8px; cursor:grab; background:#0f1621; }
+input, textarea, button, select { width:100%; padding:10px; border-radius:8px; border:1px solid var(--line2); background:#0f1621; color:var(--text); }
+button { background:var(--accent); border:none; color:white; font-weight:600; }
+pre { white-space: pre-wrap; background:#0f1621; border:1px solid var(--line2); border-radius:8px; padding:10px; }

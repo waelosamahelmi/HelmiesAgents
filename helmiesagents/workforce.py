@@ -144,6 +144,9 @@ class WorkforceService:
         cv_text: str,
         skills: list[str],
         slack_channels: list[str] | None = None,
+        model_provider: str | None = None,
+        model_name: str | None = None,
+        model_base_url: str | None = None,
     ) -> int:
         return self.memory.create_workforce_agent(
             tenant_id=tenant_id,
@@ -155,6 +158,9 @@ class WorkforceService:
             skills=skills,
             status="hired",
             slack_channels=slack_channels or [],
+            model_provider=model_provider,
+            model_name=model_name,
+            model_base_url=model_base_url,
         )
 
     @staticmethod
@@ -259,6 +265,30 @@ class WorkforceService:
     def list_tasks(self, tenant_id: str, status: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
         return self.memory.list_workforce_tasks(tenant_id=tenant_id, status=status, limit=limit)
 
+    @staticmethod
+    def _apply_agent_model_overrides(prompt: str, agent_row: dict[str, Any] | None) -> str:
+        if not agent_row:
+            return prompt
+
+        provider = (agent_row.get("model_provider") or "").strip()
+        model_name = (agent_row.get("model_name") or "").strip()
+        base_url = (agent_row.get("model_base_url") or "").strip()
+
+        if not provider and not model_name and not base_url:
+            return prompt
+
+        lines = ["Execution model preferences for this hired agent persona:"]
+        if provider:
+            lines.append(f"- provider: {provider}")
+        if model_name:
+            lines.append(f"- model: {model_name}")
+        if base_url:
+            lines.append(f"- base_url: {base_url}")
+        lines.append(
+            "Treat these as strict execution constraints when producing your response and planning tool usage."
+        )
+        return prompt + "\n\n" + "\n".join(lines)
+
     def run_task(
         self,
         *,
@@ -315,6 +345,7 @@ class WorkforceService:
                 f"Your skills: {', '.join(c.get('skills', []))}\n"
                 "Provide concise recommendations and risks from your specialty."
             )
+            c_prompt = self._apply_agent_model_overrides(c_prompt, c)
             c_res = agent.chat(
                 session_id=f"workforce-task-{task_id}-collab-{c.get('id')}",
                 user_message=c_prompt,
@@ -349,6 +380,8 @@ class WorkforceService:
             f"{notes_block}\n\n"
             "Synthesize a final execution summary and concrete next actions."
         )
+
+        prompt = self._apply_agent_model_overrides(prompt, assigned_agent)
 
         self.memory.update_workforce_task(tenant_id=tenant_id, task_id=task_id, status="in_progress")
         res = agent.chat(

@@ -48,6 +48,25 @@ class HelmiesAgent:
         self.budget_policy = ExecutionBudgetPolicy(settings.execution_budget_file)
         self.router = ModelRouter(default_model=settings.openai_model, policy_file=settings.routing_policy_file)
 
+    @staticmethod
+    def _extract_model_hints_from_prompt(user_prompt: str) -> tuple[str | None, str | None]:
+        model_name: str | None = None
+        base_url: str | None = None
+
+        m_model = re.search(r"^- model:\s*(.+)$", user_prompt, flags=re.MULTILINE)
+        if m_model:
+            candidate = m_model.group(1).strip()
+            if candidate and candidate != "-":
+                model_name = candidate
+
+        m_url = re.search(r"^- base_url:\s*(.+)$", user_prompt, flags=re.MULTILINE)
+        if m_url:
+            candidate = m_url.group(1).strip()
+            if candidate and candidate != "-":
+                base_url = candidate
+
+        return model_name, base_url
+
     def _system_prompt(self) -> str:
         tool_lines = "\n".join([f"- {t['name']}: {t['description']}" for t in self.tools.list_tools()])
         return (
@@ -199,10 +218,21 @@ class HelmiesAgent:
         model_override: str | None,
         budget: dict[str, Any] | None = None,
     ) -> tuple[str, dict[str, Any]]:
+        hinted_model, hinted_base_url = self._extract_model_hints_from_prompt(prompt)
+        effective_model = hinted_model or model_override
+
         required = self.critic.required_keywords_from_prompt(user_message)
         attempts: list[dict[str, Any]] = []
 
-        current = self.provider.generate(system_prompt, prompt, model_override=model_override)
+        try:
+            current = self.provider.generate(
+                system_prompt,
+                prompt,
+                model_override=effective_model,
+                base_url_override=hinted_base_url,
+            )
+        except TypeError:
+            current = self.provider.generate(system_prompt, prompt, model_override=effective_model)
         c = self.critic.evaluate(user_message=user_message, response_text=current, required_keywords=required)
         attempts.append({"attempt": 1, "score": c.score, "pass": c.pass_gate, "feedback": c.feedback})
 
@@ -221,7 +251,15 @@ class HelmiesAgent:
                     critic_feedback=c.feedback,
                     required_keywords=required,
                 )
-                current = self.provider.generate(system_prompt, repair, model_override=model_override)
+                try:
+                    current = self.provider.generate(
+                        system_prompt,
+                        repair,
+                        model_override=effective_model,
+                        base_url_override=hinted_base_url,
+                    )
+                except TypeError:
+                    current = self.provider.generate(system_prompt, repair, model_override=effective_model)
                 c = self.critic.evaluate(user_message=user_message, response_text=current, required_keywords=required)
                 attempts.append({"attempt": 1 + tries, "score": c.score, "pass": c.pass_gate, "feedback": c.feedback})
 
@@ -232,6 +270,8 @@ class HelmiesAgent:
             "final_score": c.score,
             "final_pass": bool(c.pass_gate and c.score >= target),
             "target": target,
+            "model_used": effective_model,
+            "base_url_used": hinted_base_url,
         }
         return current, quality
 
@@ -300,7 +340,17 @@ class HelmiesAgent:
 
         for idx, subtask in enumerate(subtasks, start=1):
             p = self._subrun_prompt(user_message=user_message, subtask=subtask)
-            sub_response = self.provider.generate(system_prompt, p, model_override=model_override)
+            hinted_model, hinted_base_url = self._extract_model_hints_from_prompt(p)
+            effective_model = hinted_model or model_override
+            try:
+                sub_response = self.provider.generate(
+                    system_prompt,
+                    p,
+                    model_override=effective_model,
+                    base_url_override=hinted_base_url,
+                )
+            except TypeError:
+                sub_response = self.provider.generate(system_prompt, p, model_override=effective_model)
 
             verification: dict[str, Any] | None = None
             if self.settings.autonomous_subruns_verify:
@@ -372,7 +422,18 @@ class HelmiesAgent:
         yield StreamEvent(type="meta", data={"plan": plan, "route_policy": route.policy_name, "model": route.model, "budget": budget})
 
         chunks: list[str] = []
-        for chunk in self.provider.stream_generate(self._system_prompt(), prompt, model_override=route.model):
+        hinted_model, hinted_base_url = self._extract_model_hints_from_prompt(prompt)
+        effective_model = hinted_model or route.model
+        try:
+            _stream = self.provider.stream_generate(
+                self._system_prompt(),
+                prompt,
+                model_override=effective_model,
+                base_url_override=hinted_base_url,
+            )
+        except TypeError:
+            _stream = self.provider.stream_generate(self._system_prompt(), prompt, model_override=effective_model)
+        for chunk in _stream:
             if not chunk:
                 continue
             chunks.append(chunk)
@@ -397,6 +458,8 @@ class HelmiesAgent:
             "mode": "stream_no_repair",
             "autonomy": autonomy,
             "budget": budget,
+            "model_used": effective_model,
+            "base_url_used": hinted_base_url,
         }
         yield StreamEvent(type="model_output", data={"text": full_text})
 

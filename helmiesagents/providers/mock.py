@@ -24,10 +24,24 @@ class MockProvider:
             "If you want tool execution, ask explicitly (e.g., 'what time is it' or 'list files')."
         )
 
-    def generate(self, system_prompt: str, user_prompt: str, model_override: str | None = None) -> str:
+    def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model_override: str | None = None,
+        base_url_override: str | None = None,
+    ) -> str:
+        _ = model_override, base_url_override
         return self._build_response(user_prompt)
 
-    def stream_generate(self, system_prompt: str, user_prompt: str, model_override: str | None = None) -> Iterable[str]:
+    def stream_generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model_override: str | None = None,
+        base_url_override: str | None = None,
+    ) -> Iterable[str]:
+        _ = model_override, base_url_override
         text = self._build_response(user_prompt)
         for ch in text:
             yield ch

@@ -46,6 +46,9 @@ All requested phases have been implemented in this repository as a production-fo
 - slack inbound routing to hired agent persona (`agent_id` + `thread_id` aware)
 - slack OAuth wizard backend with state persistence and installations registry
 - WebUI workforce management controls + control-center buttons + kanban lanes
+- Per-agent model/provider/base_url settings persisted and editable via API
+- Drag/drop Kanban interactions wired to task status patch endpoint
+- Admin WebUI migration scaffold added (`helmiesagents/webapp`) with API integration for recurring, OAuth installer, Kanban, and model settings
 
 ## Validation
 - unit tests passing

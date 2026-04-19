@@ -113,6 +113,9 @@ class WorkforceHireRequest(BaseModel):
     cv_text: str = ""
     skills: list[str] = []
     slack_channels: list[str] = []
+    model_provider: str | None = None
+    model_name: str | None = None
+    model_base_url: str | None = None
 
 
 class WorkforceTaskRequest(BaseModel):
@@ -125,6 +128,12 @@ class WorkforceTaskRequest(BaseModel):
 
 class WorkforceTaskStatusRequest(BaseModel):
     status: str
+
+
+class WorkforceAgentModelSettingsRequest(BaseModel):
+    model_provider: str | None = None
+    model_name: str | None = None
+    model_base_url: str | None = None
 
 
 class WorkforceTaskRunRequest(BaseModel):
@@ -633,6 +642,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             cv_text=req.cv_text,
             skills=req.skills,
             slack_channels=req.slack_channels,
+            model_provider=req.model_provider,
+            model_name=req.model_name,
+            model_base_url=req.model_base_url,
         )
         memory.log_audit(
             tenant_id=ctx.tenant_id,
@@ -646,6 +658,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def workforce_agents(authorization: str | None = Header(default=None)) -> dict[str, Any]:
         ctx = get_ctx(authorization)
         return {"agents": workforce.list_agents(ctx.tenant_id)}
+
+    @app.post("/workforce/agents/{agent_id}/model")
+    def workforce_agent_model_settings(
+        agent_id: int,
+        req: WorkforceAgentModelSettingsRequest,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        ctx = get_ctx(authorization)
+        if not is_admin(ctx):
+            raise HTTPException(status_code=403, detail="admin required")
+
+        if req.model_provider is None and req.model_name is None and req.model_base_url is None:
+            raise HTTPException(status_code=400, detail="no model settings provided")
+
+        ok = memory.update_workforce_agent_model_settings(
+            tenant_id=ctx.tenant_id,
+            agent_id=agent_id,
+            model_provider=req.model_provider,
+            model_name=req.model_name,
+            model_base_url=req.model_base_url,
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="agent not found")
+
+        memory.log_audit(
+            tenant_id=ctx.tenant_id,
+            user_id=ctx.user_id,
+            event_type="workforce_agent_model_update",
+            payload_json=json.dumps(
+                {
+                    "agent_id": agent_id,
+                    "model_provider": req.model_provider,
+                    "model_name": req.model_name,
+                    "model_base_url": req.model_base_url,
+                }
+            ),
+        )
+        return {"ok": True, "agent_id": agent_id}
 
     @app.post("/workforce/manifest/slack")
     def workforce_manifest_slack(req: SlackManifestRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
@@ -939,6 +989,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
+        web_dist_index = Path(Path(__file__).resolve().parent.parent / "webapp" / "dist" / "index.html")
+        if web_dist_index.exists():
+            return web_dist_index.read_text()
         return Path(Path(__file__).resolve().parent.parent / "web" / "index.html").read_text()
 
     return app
