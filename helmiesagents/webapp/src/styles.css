@@ -17,6 +17,58 @@ body { margin:0; background:var(--bg); color:var(--text); font-family:Inter, Ari
 .col { border:1px solid var(--line2); border-radius:10px; min-height:160px; padding:8px; }
 .col.drag-over { outline:2px dashed var(--accent); }
 .task { border:1px solid var(--line2); border-radius:8px; padding:8px; margin-bottom:8px; cursor:grab; background:#0f1621; }
+.stack { display:flex; flex-direction:column; gap:6px; }
+
+.agentGrid { display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap:10px; margin-bottom:10px; }
+.agentCard { display:flex; gap:10px; padding:10px; border:1px solid var(--line2); border-radius:10px; background:#0f1621; }
+.agentAvatar { width:52px; height:52px; border-radius:999px; object-fit:cover; border:1px solid var(--line2); }
+.agentName { font-weight:700; }
+.agentRole { color:#c5d4e4; font-size:13px; }
+.agentFocus { color:var(--muted); font-size:12px; }
+
+.availablePdooh { display:flex; flex-direction:column; justify-content:center; align-items:center; border:1px solid var(--line2); border-radius:10px; background:#0f1621; min-height:74px; }
+.bigCount { font-size:28px; font-weight:800; line-height:1; }
+
+.mapWrap {
+  position:relative;
+  width:100%;
+  height:260px;
+  border:1px solid var(--line2);
+  border-radius:12px;
+  background: radial-gradient(circle at center, rgba(37,99,235,0.12), rgba(37,99,235,0.02));
+  overflow:hidden;
+  margin-top:10px;
+}
+.radiusCircle {
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform: translate(-50%, -50%);
+  border:2px dashed rgba(37,99,235,0.8);
+  border-radius:999px;
+  background: rgba(37,99,235,0.12);
+}
+.mapCenter {
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform: translate(-50%, -50%);
+  color:#7dd3fc;
+  font-size:18px;
+  text-shadow: 0 0 8px rgba(125,211,252,0.8);
+}
+.screenPin {
+  position:absolute;
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  transform: translate(-50%, -50%);
+}
+.screenPin.inside { background:#22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.7); }
+.screenPin.outside { background:#64748b; opacity:0.55; }
+
+.mapSummary { margin-top:8px; color:#c5d4e4; font-size:13px; }
+
 input, textarea, button, select { width:100%; padding:10px; border-radius:8px; border:1px solid var(--line2); background:#0f1621; color:var(--text); }
 button { background:var(--accent); border:none; color:white; font-weight:600; }
 pre { white-space: pre-wrap; background:#0f1621; border:1px solid var(--line2); border-radius:8px; padding:10px; }

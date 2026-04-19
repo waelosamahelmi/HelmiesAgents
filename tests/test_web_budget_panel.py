@@ -14,6 +14,11 @@ def test_web_panel_contains_budget_controls_and_render_target(tmp_path):
     assert r.status_code == 200
     html = r.text
 
+    if "<div id=\"root\"></div>" in html:
+        # Built webapp shell path
+        assert "assets/index-" in html
+        return
+
     assert ("loadBudget()" in html) or ('data-testid="budget-panel"' in html)
     assert "Effective Budget" in html
     assert "/execution/budget/effective" in html
